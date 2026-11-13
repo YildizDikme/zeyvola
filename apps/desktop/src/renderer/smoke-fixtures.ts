@@ -316,3 +316,24 @@ export async function recordLikeBrowser(seconds = 8): Promise<SyntheticRecording
     secretRegion: { x: 336 / W, y: 344 / H, w: 688 / W, h: 62 / H },
   };
 }
+
+/**
+ * A 1024×768 (4:3) screen video like the Windows click driver's (tests/real-capture-web/windows-clicks.ps1):
+ * a busy blue-grey desktop with a 240 px magenta square in a 20 px black frame in the middle, still.
+ * The interface test exports it and measures the square in the exported frame (uitest.ts).
+ */
+export const KNOWN_SQUARE = { screenW: 1024, screenH: 768, x: 392, y: 264, size: 240, frame: 20 } as const;
+export async function synthesizeSquareScreen(seconds = 3): Promise<{ screen: Uint8Array; videoMime: 'video/mp4' | 'video/webm'; width: number; height: number }> {
+  const { screenW: w, screenH: h, x, y, size, frame } = KNOWN_SQUARE;
+  const screen = await encodeVideo(w, h, Math.round(seconds * FPS), (g) => {
+    g.fillStyle = '#284670';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#dcdcdc';
+    for (let r = 20; r < h; r += 14) for (let c = 10; c < w; c += 90) g.fillRect(c, r, 60, 2);
+    g.fillStyle = '#000';
+    g.fillRect(x - frame, y - frame, size + 2 * frame, size + 2 * frame);
+    g.fillStyle = '#ff00ff';
+    g.fillRect(x, y, size, size);
+  });
+  return { screen, videoMime: FIXTURE_MIME, width: w, height: h };
+}

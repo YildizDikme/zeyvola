@@ -476,7 +476,8 @@ function registerIpc(): void {
     type RealCaptureOp =
       | { op: 'env' }
       | { op: 'signal' | 'readSignal'; name: string }
-      | { op: 'keep'; projectId: string; path: string; as: string };
+      | { op: 'keep'; projectId: string; path: string; as: string }
+      | { op: 'readExport'; path: string };
     const realCaptureOp = async (p: RealCaptureOp): Promise<unknown> => {
       // ZEYVOLA_UITEST_ONLY=export: the interface test runs only the export steps (CI's extra runs).
       // ZEYVOLA_TEST_EXPECT_ROUTE: the export route this machine must pick (webcodecs | mf | webm-fallback).
@@ -491,6 +492,10 @@ function registerIpc(): void {
         await writeFile(join(signalDir, signalName(p.name)), `${Date.now()}\n`);
         return true;
       }
+      // readExport: the bytes of an exported file the media protocol does not serve (one written to the
+      // folder picked with "Değiştir…", outside the project), so the test can decode a frame of it.
+      // Limited to the test's temporary folders, like the other test file access (testPath).
+      if (p.op === 'readExport') return new Uint8Array(await readFile(testPath(p)));
       if (p.op === 'readSignal') return signalDir ? readFile(join(signalDir, signalName(p.name)), 'utf8').catch(() => null) : null;
       if (p.op !== 'keep') throw new Error('unknown op');
       // keep: copies a file of a (temporary) project next to the screenshots, for CI artifacts.

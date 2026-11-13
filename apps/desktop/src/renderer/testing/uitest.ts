@@ -28,7 +28,7 @@ import { colorDistance, darkBands, findSquare, isFound, meanColor, type Pixels, 
 import type { EditorStore } from '../state/editor-store';
 import { avcProfileName, compareFrames, mp4Tracks, sharpness } from './mp4-stats';
 import { t } from '../i18n';
-import { recordLikeBrowser } from '../smoke-fixtures';
+import { KNOWN_SQUARE, recordLikeBrowser, synthesizeSquareScreen } from '../smoke-fixtures';
 import {
   all, button, buttonStarting, click, commandKey, cpuNow, passed, cpuPercent, createSampleProject, currentEditor, decodeSound, exportsRel, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, routedExport, screenshot, sleep, text, until, type Check,
 } from './harness';
@@ -398,6 +398,56 @@ export async function runUiTest(): Promise<unknown> {
     return `${r.engine}: ${r.problems.join('; ')}`;
   });
 
+  // The export the real recording test measures goes where the user's last export went: after
+  // "Değiştir…" above, the picked folder outside the project, which the media protocol does not
+  // serve. The same reading (readExport → Blob URL) and the same square measurement, on a synthetic
+  // 4:3 screen with the click driver's square, so they run on every machine (Windows CI run 10
+  // could not read that export).
+  if (editing && chosenFolder) {
+    await step('Dışa aktarma (seçilen klasöre): sentetik kayıttaki bilinen kare dışa aktarılan karede okunur, ortası yerinde, kare ve eflatun', async () => {
+      const k = KNOWN_SQUARE;
+      const syn = await synthesizeSquareScreen(3);
+      const { id } = await api.createProject('Kare ölçümü');
+      const recordingId = `rec_${crypto.randomUUID()}`;
+      const file = `media/${recordingId}/screen.${syn.videoMime === 'video/webm' ? 'webm' : 'mp4'}`;
+      await invoke('smoke:writeFile', { projectId: id, path: file, data: syn.screen });
+      const dur = secondsToTicks(3);
+      await invoke('smoke:appendRecording', {
+        projectId: id,
+        recording: {
+          id: recordingId, createdAt: new Date().toISOString(), duration: dur,
+          sources: { screen: { kind: 'screen', file, mime: syn.videoMime, width: syn.width, height: syn.height, fps: 30, startOffset: 0, duration: dur } },
+          capture: { backend: 'web', platform: 'smoke', target: { kind: 'display', label: 'Sentetik kare', bounds: { x: 0, y: 0, w: syn.width, h: syn.height }, scaleFactor: 1 }, cursorInFrames: true, hasClicks: false },
+          syncOffsets: {}, markers: [],
+        },
+      });
+      const opened = await api.openProject(id);
+      const project = parseProject(opened.json);
+      const r = await routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format: 'webm', resolution: '1080', fps: 30, quality: 'standard', includeAudio: false }, () => undefined, new AbortController().signal);
+      expect(r.phase === 'done' && r.path, `dışa aktarma bitmedi: ${r.phase} ${r.message ?? ''}`);
+      const where = r.path!.replace(/\\/g, '/');
+      expect(!where.includes('/exports/') && where.includes('/Seçilen klasör/'), `dosya seçilen klasöre yazılmadı: ${where}`);
+      const src = await exportedFrameSource(r.path!, opened.mediaBase);
+      let g: Awaited<ReturnType<typeof grabFrame>>;
+      try { g = await grabFrame(src.url, 1.5); } finally { src.release(); }
+      // The 4:3 screen sits centered in the 16:9 frame (pillars): x and width shrink by 3/4.
+      const share = (k.screenW / k.screenH) / (16 / 9);
+      const e = { fx: 0.5 + (k.x / k.screenW - 0.5) * share, fy: k.y / k.screenH, fw: (k.size / k.screenW) * share, fh: k.size / k.screenH };
+      const f = findSquare(g.px, { cx: e.fx + e.fw / 2, cy: e.fy + e.fh / 2, fw: e.fw, fh: e.fh });
+      expect(isFound(f), `kare bulunamadı: ${isFound(f) ? '' : f.reason} (${src.how})`);
+      const box = f as SquareFound;
+      const near = (a: number, b: number) => Math.abs(a - b) < 0.012;
+      const ratio = (box.fw * g.px.width) / (box.fh * g.px.height);
+      const at = `beklenen x ${e.fx.toFixed(3)} y ${e.fy.toFixed(3)} g ${e.fw.toFixed(3)} y ${e.fh.toFixed(3)} · bulunan x ${box.fx.toFixed(3)} y ${box.fy.toFixed(3)} g ${box.fw.toFixed(3)} y ${box.fh.toFixed(3)}`;
+      // The scene's background frame shrinks the screen around the middle (layout), so the square's
+      // middle is judged here, its size only reported; the shape and the colour are judged exactly.
+      expect(near(box.fx + box.fw / 2, e.fx + e.fw / 2) && near(box.fy + box.fh / 2, e.fy + e.fh / 2), `karenin ortası yerinde değil: ${at}`);
+      expect(Math.abs(ratio - 1) < 0.02, `en/boy ${ratio.toFixed(3)} (1 olmalı) · ${at}`);
+      expect(colorDistance(box.rgb, [255, 0, 255]) < 60, `renk ${JSON.stringify(box.rgb)} (eflatun olmalı)`);
+      return `${where.slice(where.indexOf('/Seçilen klasör/'))} · ${src.how} · ${g.px.width}×${g.px.height} · en/boy ${ratio.toFixed(3)}, renk ${JSON.stringify(box.rgb)} · ${at}`;
+    });
+  }
+
   // Only when asked (CI on Windows): macOS needs the screen recording permission, which a test
   // run never asks for.
   let realCapture: RealCapture | null = null;
@@ -681,7 +731,8 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
       const t0 = performance.now();
       const r = await routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format: 'webm', resolution: '1080', fps: 30, quality: 'standard', includeAudio: false }, () => undefined, new AbortController().signal);
       if (r.phase === 'done' && r.path) {
-        exportedUrl = url(exportsRel(r.path));
+        const exportedSrc = await exportedFrameSource(r.path, opened.mediaBase);
+        exportedUrl = exportedSrc.url; // kept until the pictures are made (lookImages), then let go with the page
         let box: SquareFound | null = null;
         const misses: string[] = [];
         let measureError: string | undefined;
@@ -691,7 +742,7 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
         const near = { cx: 0.5 + (cx - 0.5) * screenShare, cy, fw: log.shape.fw * screenShare, fh: log.shape.fh };
         for (const at of [3, 2, 4]) {
           try {
-            const f = findSquare((await grabFrame(exportedUrl, at)).px, near);
+            const f = findSquare((await grabFrame(exportedSrc.url, at)).px, near);
             if (isFound(f)) { box = f; break; }
             misses.push(`${at} sn: ${f.reason}`);
           } catch (e) {
@@ -776,6 +827,20 @@ async function lookImages(project: Project, mediaBase: string, recorded: string 
   });
   await add('4-disa-aktarilan', `dışa aktarılan WebM'in ${LOOK_AT}. saniyedeki karesi`, async () => (exported ? frameJpeg(exported, LOOK_AT) : null));
   return images;
+}
+
+/**
+ * A URL the page can decode an exported file from: the media protocol serves the project's own
+ * exports/; a file in a folder the user picked ("Değiştir…") is read through the test channel
+ * (readExport, limited to the test's temporary folders) into a Blob URL.
+ */
+async function exportedFrameSource(fullPath: string, mediaBase: string): Promise<{ url: string; how: string; release: () => void }> {
+  const p = fullPath.replace(/\\/g, '/');
+  if (p.includes('/exports/')) return { url: mediaUrl(mediaBase, exportsRel(fullPath)), how: 'medya protokolü (exports/)', release: () => undefined };
+  const bytes = await invoke<Uint8Array>('smoke:realRecording', { op: 'readExport', path: fullPath });
+  const type = p.endsWith('.webm') ? 'video/webm' : 'video/mp4';
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type }));
+  return { url, how: `test kanalı + Blob URL (${Math.round(bytes.byteLength / 1024)} KB)`, release: () => URL.revokeObjectURL(url) };
 }
 
 /** How long a video may take to show its first frame (the CI machine decodes in software). */
