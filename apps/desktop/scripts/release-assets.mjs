@@ -3,14 +3,15 @@
 // or published: the files are written to apps/desktop/out/release/<version>/ and a person attaches
 // them to the release.
 //
-//   node apps/desktop/scripts/release-assets.mjs [--platform darwin|win32] [--arch arm64|x64] [--draft] [--smoke <report.json>]
+//   node apps/desktop/scripts/release-assets.mjs [--platform darwin|win32] [--arch arm64|x64] [--draft] [--smoke <report.json>] [--out <dir>]
 //
 // --smoke: a report written by the packaged app itself (`… --smoke --smoke-report <file>`); its
 // pass count and GPU go into RELEASE-STATUS.json, so "tested" says what ran and where.
 //
 // First runs `codec-audit --release` on the package; any failure or release blocker stops here.
 // --draft writes the files even when only release blockers remain (for review, never for publishing).
-// Windows is always a draft: it has not been tested on real Windows yet.
+// Windows is released as a beta (RELEASE-STATUS.json: channel "beta"): automated tests on GitHub's
+// Windows machine only, not yet tried on a real Windows 10/11 PC.
 // Files: Zeyvola-<v>-macos-<arch>.zip and .dmg, or Zeyvola-<v>-windows-<arch>.zip (the app plus
 // README, RELEASE.txt, LICENSE, NOTICE and the third-party notices), the FFmpeg source bundle
 // (LGPL-2.1: offered from the same place as the binary), SHA256SUMS.txt and RELEASE-STATUS.json
@@ -29,14 +30,15 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(`--${name}`); r
 const platform = arg('platform', 'darwin');
 const arch = arg('arch', platform === 'win32' ? 'x64' : process.arch);
 const windows = platform === 'win32';
-const draft = process.argv.includes('--draft') || windows;
+const draft = process.argv.includes('--draft');
+const BETA_NOTE = 'GitHub\'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi.';
 const { version, author, homepage } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
 const { createZip } = await import(pathToFileURL(join(root, 'tools', 'electron-artifacts.mjs')).href);
 // The released profile is A (package.mjs default since 2026-11-13).
 const PROFILE = 'mp4';
 const pkgDir = join(appDir, 'out', PROFILE, `${platform}-${arch}`);
 const app = join(pkgDir, windows ? 'Zeyvola.exe' : 'Zeyvola.app');
-if (!existsSync(app)) { console.error(`Önce paket: node apps/desktop/scripts/package.mjs --platform ${platform} --arch ${arch}${windows ? ' --experimental-windows' : ''}`); process.exit(1); }
+if (!existsSync(app)) { console.error(`Önce paket: node apps/desktop/scripts/package.mjs --platform ${platform} --arch ${arch}`); process.exit(1); }
 
 // 1) Audit the exact package that will be zipped.
 const auditJson = join(pkgDir, 'codec-audit-release.json');
@@ -50,7 +52,7 @@ if (audit.status !== 0 && !(draft && onlyBlockers)) {
 }
 
 // 2) Zip: the app and, next to it, the license files a recipient must get.
-const out = join(appDir, 'out', 'release', version);
+const out = resolve(arg('out', join(appDir, 'out', 'release', version))); // --out: a trial run elsewhere
 mkdirSync(out, { recursive: true });
 const label = `${windows ? 'windows' : 'macos'}-${arch}`;
 const stage = mkdtempSync(join(tmpdir(), 'zeyvola-release-'));
@@ -72,12 +74,12 @@ writeFileSync(join(folder, 'RELEASE.txt'), [
   `Source: ${homepage}`,
   `Electron ${electronVersion} · FFmpeg without proprietary codecs (FFMPEG-LGPL.md)`,
   `Prepared: ${new Date().toISOString().slice(0, 10)}`,
-  windows ? 'Status: test build, not tested on real Windows yet; not for general use.' : '',
+  windows ? 'Status: beta. Passed the automated tests on GitHub\'s Windows machine; not yet tried on a real Windows 10/11 PC.' : '',
 ].filter(Boolean).join('\n') + '\n');
 const extra = [['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'], ['FFMPEG-LGPL.md', 'FFMPEG-LGPL.md'], ['LICENSES.chromium.html', 'LICENSES.chromium.html'], ['electron-LICENSE.txt', 'LICENSE.electron.txt']];
 if (windows && existsSync(join(lic, 'MICROSOFT-D3DCOMPILER-TERMS.txt'))) extra.push(['MICROSOFT-D3DCOMPILER-TERMS.txt', 'MICROSOFT-D3DCOMPILER-TERMS.txt']);
 for (const [from, to] of extra) copyFileSync(join(lic, from), join(folder, to));
-const zip = join(out, `Zeyvola-${version}-${label}${windows ? '-TASLAK' : ''}.zip`);
+const zip = join(out, `Zeyvola-${version}-${label}.zip`);
 rmSync(zip, { force: true });
 createZip(folder, zip); // macOS: ditto without __MACOSX entries; Windows: System32 bsdtar
 // macOS also as a disk image: the same folder plus a link to Applications for drag-to-install.
@@ -109,11 +111,12 @@ const codesign = windows ? null : spawnSync('codesign', ['-dv', app], { encoding
 const statusFile = join(out, 'RELEASE-STATUS.json');
 const status = existsSync(statusFile) ? JSON.parse(readFileSync(statusFile, 'utf8')) : {};
 status[label] = {
-  zip: basename(zip), sha256: sha(zip), ...(dmg ? { dmg: basename(dmg), dmgSha256: sha(dmg) } : {}), draft, preparedAt: new Date().toISOString(),
+  zip: basename(zip), sha256: sha(zip), ...(dmg ? { dmg: basename(dmg), dmgSha256: sha(dmg) } : {}), draft, ...(windows ? { channel: 'beta', note: BETA_NOTE } : {}), preparedAt: new Date().toISOString(),
   signing: windows
     ? 'imzasız (Authenticode yok): Windows SmartScreen "Windows bilgisayarınızı korudu" uyarısı gösterir'
     : `${/Signature=adhoc/.test(codesign ?? '') ? 'geçici (ad-hoc) imza' : 'imza okunamadı'}; Developer ID ve noter onayı (notarization) yok: Gatekeeper ilk açılışta uyarır`,
   tested: tested(),
+  warnings: report.warnings ?? [],
   blockers: report.blockers,
 };
 writeFileSync(statusFile, `${JSON.stringify(status, null, 1)}\n`);
@@ -122,7 +125,7 @@ function tested() {
   const smoke = smokeFile ? JSON.parse(readFileSync(smokeFile, 'utf8')) : null;
   const passed = smoke ? `${smoke.checks.filter((c) => c.ok).length}/${smoke.checks.length}` : null;
   const host = `${process.platform === 'darwin' ? 'macOS' : process.platform} ${process.arch === 'arm64' ? 'Apple Silicon' : process.arch}`;
-  const where = windows ? (process.platform === 'win32' && smoke ? `Windows'ta (${process.arch}) çalıştırıldı` : 'gerçek Windows\'ta test edilmedi')
+  const where = windows ? `${process.platform === 'win32' && smoke ? `bu dosya Windows'ta (${process.env.GITHUB_ACTIONS ? 'GitHub Actions makinesi' : process.arch}) çalıştırıldı` : 'bu dosya Windows\'ta çalıştırılmadı'}; gerçek bir Windows 10/11 bilgisayarda denenmedi`
     : arch === process.arch ? `bu Mac'te (${host}) çalıştırıldı`
       : arch === 'x64' && process.arch === 'arm64' ? `${host} Mac'te Rosetta 2 altında çalıştırıldı; gerçek Intel donanımında (Intel GPU, Intel VideoToolbox) test edilmedi`
         : `bu mimaride çalıştırılmadı (derleyen makine ${host})`;

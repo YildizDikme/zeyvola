@@ -207,6 +207,7 @@ export async function audit(dir, profile, { probe = false, release = false } = {
   const fails = [];
   const notes = [];
   const blockers = [];
+  const warnings = []; // shown on every run, never a blocker (a licensor decision that leaves a risk open)
   const report = { package: dir, platform: L.platform, profile, checks: {} };
   const peMachine = (f) => { const b = readFileSync(f); return b.readUInt16LE(b.readUInt32LE(0x3c) + 4); };
   const arch = L.platform === 'darwin'
@@ -293,12 +294,22 @@ export async function audit(dir, profile, { probe = false, release = false } = {
       const terms = {
         textShipped: existsSync(shipped) && sha256(shipped) === sha256(source),
         gateInApp: existsSync(mainJs) && readFileSync(mainJs, 'utf8').includes('third-party-terms.json'),
-        legalReview: decision.legalReview, indemnity: decision.indemnity,
+        legalReview: null, indemnity: null,
       };
       if (!terms.textShipped) fails.push('Windows paketinde Microsoft kullanıcı koşulları metni yok ya da güncel değil (resources/licenses/MICROSOFT-D3DCOMPILER-TERMS.txt)');
       if (!terms.gateInApp) fails.push('Windows paketinde ilk açılış kabul ekranı yok');
-      if (!decision.legalReview) blockers.push('Windows: d3dcompiler_47.dll kullanıcı koşulları metni hukuki incelemeden geçmedi (tools/windows-terms.json)');
-      if (!decision.indemnity) blockers.push('Windows: Windows SDK lisansının Microsoft\'u tazmin yükümlülüğü için lisans verenin kararı yok (tools/windows-terms.json)');
+      // Only the licensor's decisions count, in the shapes tools/windows-terms.json describes.
+      // legalReview {done: false, riskAcceptedBy, date} is not a review: it lifts the blocker but
+      // stays a visible warning on every run. Anything else (null, a bare string, true) blocks.
+      const lr = decision.legalReview;
+      const ind = decision.indemnity;
+      const reviewed = lr?.done === true && !!lr.by && !!lr.date;
+      const riskAccepted = lr?.done === false && !!lr.riskAcceptedBy && !!lr.date;
+      terms.legalReview = reviewed ? `yapıldı (${lr.by}, ${lr.date})` : riskAccepted ? `YAPILMADI; lisans veren riski kabul etti (${lr.riskAcceptedBy}, ${lr.date})` : null;
+      terms.indemnity = ind?.accepted === true && !!ind.by && !!ind.date ? `lisans veren kabul etti (${ind.by}, ${ind.date})` : null;
+      if (riskAccepted) warnings.push(`Windows: d3dcompiler_47.dll kullanıcı koşulları metni için hukuki inceleme yapılmadı; lisans veren (${lr.riskAcceptedBy}) ${lr.date} tarihinde incelemesiz yayımlamayı ve riski kabul etti (tools/windows-terms.json)`);
+      else if (!reviewed) blockers.push('Windows: d3dcompiler_47.dll kullanıcı koşulları metni hukuki incelemeden geçmedi ve lisans verenin kararı yok (tools/windows-terms.json)');
+      if (!terms.indemnity) blockers.push('Windows: Windows SDK lisansının Microsoft\'u tazmin yükümlülüğü için lisans verenin kararı yok (tools/windows-terms.json)');
       report.checks.microsoftTerms = terms;
     } else {
       notes.push('d3dcompiler_47.dll pakette yok (--omit-d3dcompiler): WebGL için Windows\'un kendi kopyası ya da ANGLE Vulkan gerekir; gerçek Windows\'ta doğrulanmadı');
@@ -417,7 +428,7 @@ export async function audit(dir, profile, { probe = false, release = false } = {
   }
 
   if (release) for (const b of blockers) fails.push(`yayın engeli: ${b}`);
-  Object.assign(report, { ok: fails.length === 0, fails, notes, blockers });
+  Object.assign(report, { ok: fails.length === 0, fails, notes, warnings, blockers });
   return report;
 }
 
@@ -480,7 +491,7 @@ function print(r) {
   const w = r.checks.windowsHelper;
   if (w) line(`  Windows yardımcısı: ${w.present ? `var · DLL: ${w.dlls.join(', ')} · yasak işlev: ${w.forbiddenFunctions.length ? w.forbiddenFunctions.join(', ') : 'yok'}` : 'yok'}`);
   const m = r.checks.microsoftTerms;
-  if (m) line(`  Microsoft d3dcompiler koşulları: metin ${m.textShipped ? 'pakette' : 'YOK'} · ilk açılış kabul ekranı ${m.gateInApp ? 'var' : 'YOK'} · hukuki inceleme ${m.legalReview ? 'var' : 'yok'} · tazmin kararı ${m.indemnity ? 'var' : 'yok'}`);
+  if (m) line(`  Microsoft d3dcompiler koşulları: metin ${m.textShipped ? 'pakette' : 'YOK'} · ilk açılış kabul ekranı ${m.gateInApp ? 'var' : 'YOK'} · hukuki inceleme: ${m.legalReview ?? 'yok, karar yok'} · tazmin: ${m.indemnity ?? 'karar yok'}`);
   line(`  arayüzde H.264/AAC/HEVC dizeleri: ${Object.keys(r.checks.rendererCodecStrings).length ? Object.entries(r.checks.rendererCodecStrings).map(([k, v]) => `${k}×${v}`).join(' ') : 'yok'}`);
   const n = r.checks.notices;
   line(`  bildirimler: ${n.missing.length ? `EKSİK ${n.missing.join(', ')}` : 'tam'} · Chromium ${n.chromium?.entries ?? '?'} giriş${n.chromium?.matchesThisPlatformsElectron ? ' (bu platformun dosyası)' : ''} · ${n.packages ?? '?'} npm paketi`);
@@ -488,6 +499,7 @@ function print(r) {
   if (r.checks.ffmpegSource) line(`  FFmpeg kaynağı: ${r.checks.ffmpegSource.revision.slice(0, 12)} · paket ${r.checks.ffmpegSource.bundleMatches ? 'hazır' : 'YOK'} · pakette anılıyor: ${r.checks.ffmpegSource.namedInPackage ? 'evet' : 'hayır'}`);
   if (r.checks.runtime) line(`  çalışma zamanı: ${JSON.stringify(r.checks.runtime.summary)}`);
   for (const s of r.notes) line(`  · ${s}`);
+  for (const s of r.warnings ?? []) line(`  ⚠ UYARI: ${s}`);
   for (const s of r.blockers) line(`  ! yayın engeli: ${s}`);
   for (const s of r.fails) line(`  ✗ ${s}`);
   line(r.ok ? '  SONUÇ: uygun' : '  SONUÇ: SORUNLU');

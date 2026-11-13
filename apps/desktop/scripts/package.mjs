@@ -10,8 +10,10 @@
 // microphone permissions from one test build to the next. Weaker than a real signature: never for
 // release (codec-audit --release refuses such a package).
 //
-// Releases are macOS only for now. A Windows package needs both `--platform win32` and
-// `--experimental-windows` (Windows ships d3dcompiler_47.dll, whose Microsoft terms are not met yet).
+// Windows (`--platform win32`) is released as a beta since 2026-11-13: it passes the automated tests
+// on GitHub's Windows machine but has not been tried on a real Windows 10/11 PC. The licensor's
+// decisions on Microsoft's d3dcompiler_47.dll are in tools/windows-terms.json. The former
+// `--experimental-windows` flag is no longer needed and is ignored when given.
 //
 // Output: apps/desktop/out/<profile>/<platform>-<arch>/ (git-ignored), then tools/codec-audit.mjs
 // checks what really ended up in the package. Both profiles replace Electron's libffmpeg with
@@ -41,9 +43,6 @@ const platform = arg('platform', 'darwin');
 const arch = arg('arch', process.arch);
 if (!['mp4', 'webm', 'webm-vp8'].includes(profile)) throw new Error('--profile mp4 | webm | webm-vp8');
 if (!['darwin', 'win32'].includes(platform)) throw new Error('--platform darwin | win32');
-if (platform === 'win32' && !process.argv.includes('--experimental-windows')) {
-  throw new Error('Zeyvola şimdilik yalnızca macOS için dağıtılıyor. Deneysel Windows paketi için: --platform win32 --experimental-windows');
-}
 if (!['arm64', 'x64'].includes(arch)) throw new Error('--arch arm64 | x64');
 // A macOS package needs macOS's own tools (ditto, PlistBuddy, codesign, lipo, swiftc). A Windows
 // package is made on macOS (helper cross-compiled with zig) or on Windows itself (GitHub

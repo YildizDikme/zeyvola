@@ -1,5 +1,5 @@
 {
-  "$comment": "Windows paketindeki Microsoft d3dcompiler_47.dll için iki karar. İkisi de boşken tools/codec-audit.mjs Windows paketinde yayın engeli verir. legalReview: kullanıcı koşulları metninin (tools/notices-supplement/MICROSOFT-D3DCOMPILER-TERMS.txt) hukuki incelemesi (kim, tarih). indemnity: Windows SDK lisansı, dağıtan kişinin Microsoft'u dağıtım ve kullanımla ilgili taleplere karşı tazmin etmesini, savunmasını ve zarardan korumasını şart koşar; bu yükümlülüğü lisans verenin bilerek kabul ettiği (kim, tarih). Bu alanları yalnızca lisans veren doldurur.",
+  "$comment": "Windows paketindeki Microsoft d3dcompiler_47.dll için iki karar. İkisi de boşken tools/codec-audit.mjs Windows paketinde yayın engeli verir. legalReview: kullanıcı koşulları metninin (tools/notices-supplement/MICROSOFT-D3DCOMPILER-TERMS.txt) hukuki incelemesi (kim, tarih). indemnity: Windows SDK lisansı, dağıtan kişinin Microsoft'u dağıtım ve kullanımla ilgili taleplere karşı tazmin etmesini, savunmasını ve zarardan korumasını şart koşar; bu yükümlülüğü lisans verenin bilerek kabul ettiği (kim, tarih). Bu alanları yalnızca lisans veren doldurur. Kayıt biçimi (tools/codec-audit.mjs böyle okur): indemnity = {accepted: true, by, date, how}; legalReview = {done: true, by, date} ya da incelemesiz yayımlama kararı için {done: false, riskAcceptedBy, date, how}. done:false engel değildir ama denetim her çalıştığında görünür bir uyarı verir. 2026-11-13 kaydı lisans verenin sohbetteki kararına dayanır: karar lider oturum aracılığıyla iletildi, lisans veren aynı gün bu kaydı yazan oturumda da doğrudan onayladı ('Yes, I accept'). Dosyayı bir Claude oturumu yazdı.",
   "termsVersion": "2026-10-17",
   "termsFile": "tools/notices-supplement/MICROSOFT-D3DCOMPILER-TERMS.txt",
   "sdkLicense": {
@@ -8,6 +8,18 @@
     "sha256": "dd07eb178e00c6bba4148457fc00ff77cd4887eb521d504186fe59c9ec8bbe62",
     "note": "Microsoft'un çevrim içi Windows SDK lisansı (RTF). Electron'un getirdiği DLL 10.0.26100 SDK'sından; o SDK kurulumundaki lisans metniyle karşılaştırılmadı."
   },
-  "legalReview": null,
-  "indemnity": null
+  "legalReview": {
+    "done": false,
+    "riskAcceptedBy": "Yıldız Dikme",
+    "date": "2026-11-13",
+    "how": "Sohbette: karar lider oturum aracılığıyla iletildi ('Kabul ediyorum, kaydet'); lisans veren 2026-11-13'te bu kaydı yazan oturumda doğrudan da onayladı ('Yes, I accept').",
+    "note": "HUKUKİ İNCELEME YAPILMADI. Lisans veren, MICROSOFT-D3DCOMPILER-TERMS.txt metnini hukuki inceleme olmadan yayımlamayı bilerek kabul etti; hukuki risk lisans verende. Windows paketi bu kararla Beta olarak dağıtılır."
+  },
+  "indemnity": {
+    "accepted": true,
+    "by": "Yıldız Dikme",
+    "date": "2026-11-13",
+    "how": "Sohbette: karar lider oturum aracılığıyla iletildi ('Kabul ediyorum, kaydet'); lisans veren 2026-11-13'te bu kaydı yazan oturumda doğrudan da onayladı ('Yes, I accept').",
+    "note": "Lisans veren, d3dcompiler_47.dll'i dağıttığı için Windows SDK lisansının Microsoft'u tazmin etme, savunma ve zarardan koruma yükümlülüğünü bilerek üstlendi. Hukuki görüş alınmadı."
+  }
 }
