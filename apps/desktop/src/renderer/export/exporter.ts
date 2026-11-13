@@ -9,7 +9,7 @@ import type { EncoderInfo, ExportTarget } from '@zeyvola/protocol';
 import { api } from '../api';
 import { t } from '../i18n';
 import { probe } from '../perf-probe';
-import { chooseRoute, HNS, nv12Size, rgbaToNv12, toPcm16Stereo, writtenFormat, type ExportRoute } from './route';
+import { chooseRoute, HNS, needsMfProbe, nv12Size, rgbaToNv12, toPcm16Stereo, writtenFormat, type ExportRoute } from './route';
 
 export type { ExportFormat };
 
@@ -118,11 +118,19 @@ export type ExportSupport =
   | { ok: true; encoder: string; route: ExportRoute; written: ExportFormat; notice?: string }
   | { ok: false; message: string; suggestWebm: boolean };
 
-/** What main can offer besides WebCodecs (Windows: Media Foundation through the helper); asked once per window. */
-let encoderInfo: Promise<EncoderInfo> | null = null;
-function askEncoderInfo(): Promise<EncoderInfo> {
-  encoderInfo ??= api.exportEncoderInfo().catch(() => ({ mf: { available: false, reason: 'ipc' } }));
-  return encoderInfo;
+/**
+ * What main can offer besides WebCodecs. The route a test run forces is asked once per window
+ * without the probe (cheap); the Windows helper's test encode runs only when needed, also once.
+ */
+let forcedRoute: Promise<EncoderInfo['route']> | null = null;
+let probed: Promise<EncoderInfo> | null = null;
+function askForcedRoute(): Promise<EncoderInfo['route']> {
+  forcedRoute ??= api.exportEncoderInfo(false).then((i) => i.route, () => undefined);
+  return forcedRoute;
+}
+function askMfProbe(): Promise<EncoderInfo> {
+  probed ??= api.exportEncoderInfo(true).catch(() => ({ mf: { available: false, reason: 'ipc' } }));
+  return probed;
 }
 
 /** Why WebM is written instead of MP4, for the export window (before) and its result line (after). */
@@ -159,10 +167,11 @@ export async function checkExportSupport(project: Project, o: Pick<ExportOptions
   const { width, height } = outputSize(project, o);
   const hardwareH264 = await pickVideoConfig('mp4', width, height, o.fps, bitrateFor(width, height, o.fps, o.quality, 1)).then(() => true, () => false);
   const webCodecsAac = o.includeAudio ? (await pickAudioConfig('mp4')) !== null : true;
-  const info = hardwareH264 && webCodecsAac && !encoderInfo ? null : await askEncoderInfo();
+  const forced = await askForcedRoute();
+  const info = needsMfProbe({ format: 'mp4', includeAudio: o.includeAudio, hardwareH264, webCodecsAac, forced }) ? await askMfProbe() : null;
   const route = chooseRoute({
     format: 'mp4', platform: window.zeyvola?.platform ?? '', includeAudio: o.includeAudio, hardwareH264, webCodecsAac,
-    mfAvailable: info?.mf.available ?? false, webmOffered: PROFILE.formats.includes('webm'), forced: info?.route,
+    mfAvailable: info?.mf.available ?? false, webmOffered: PROFILE.formats.includes('webm'), forced,
   });
   if (route.kind === 'mf') {
     return { ok: true, encoder: `${t("H.264 · Windows yazılım kodlayıcısı (daha yavaş)")}${o.includeAudio ? ' + AAC' : ''}`, route, written: 'mp4' };

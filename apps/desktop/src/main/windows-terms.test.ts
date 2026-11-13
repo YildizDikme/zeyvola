@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('electron', () => ({ app: {}, dialog: {}, shell: {} }));
 vi.mock('./settings', () => ({ tm: (s: string) => s }));
 
-const { TERMS_ID, TERMS_VERSION, recordAcceptance, termsAccepted, termsNeeded } = await import('./windows-terms');
+const { DLL_NAME, DLL_PENDING, TERMS_ID, TERMS_VERSION, activateDll, dllFiles, microsoftDllPresent, recordAcceptance, startupAction, termsAccepted, termsNeeded } = await import('./windows-terms');
 
 const dirs: string[] = [];
 const temp = () => { const d = mkdtempSync(join(tmpdir(), 'zeyvola-terms-')); dirs.push(d); return d; };
@@ -36,5 +36,48 @@ describe('Windows Microsoft terms', () => {
     expect(termsAccepted(d)).toBe(false);
     recordAcceptance(d);
     expect(termsAccepted(d)).toBe(true);
+  });
+
+  it('ships the DLL under a name Windows does not load, and asks before anything else', () => {
+    expect(DLL_PENDING).toBe('d3dcompiler_47.dll.terms-pending');
+    const d = temp();
+    writeFileSync(join(d, DLL_PENDING), 'dll');
+    expect(dllFiles(d)).toEqual({ active: false, pending: true });
+    expect(microsoftDllPresent(d)).toBe(true);
+    expect(startupAction('win32', dllFiles(d), false)).toBe('ask');
+    expect(startupAction('darwin', dllFiles(d), false)).toBe('none');
+    expect(startupAction('win32', { active: false, pending: false }, false)).toBe('none');
+  });
+
+  it('after acceptance the DLL gets its real name; after an update an earlier acceptance is enough', () => {
+    const d = temp();
+    writeFileSync(join(d, DLL_PENDING), 'new');
+    expect(startupAction('win32', dllFiles(d), true)).toBe('activate');
+    expect(activateDll(d)).toEqual({ ok: true });
+    expect(readdirSync(d)).toEqual([DLL_NAME]);
+    expect(startupAction('win32', dllFiles(d), true)).toBe('none');
+    // An update over the same folder: the new version's pending copy replaces the old one.
+    writeFileSync(join(d, DLL_PENDING), 'newer');
+    expect(startupAction('win32', dllFiles(d), true)).toBe('activate');
+    expect(activateDll(d)).toEqual({ ok: true });
+    expect(readFileSync(join(d, DLL_NAME), 'utf8')).toBe('newer');
+    expect(existsSync(join(d, DLL_PENDING))).toBe(false);
+  });
+
+  it('a DLL under its real name without acceptance (development Electron, old package) still asks', () => {
+    expect(startupAction('win32', { active: true, pending: false }, false)).toBe('ask');
+    expect(startupAction('win32', { active: true, pending: false }, true)).toBe('none');
+  });
+
+  it('reports the folder when the DLL cannot be renamed, and leaves the pending file alone', () => {
+    const d = temp();
+    writeFileSync(join(d, DLL_PENDING), 'dll');
+    chmodSync(d, 0o555);
+    try {
+      expect(activateDll(d)).toMatchObject({ ok: false, dir: d });
+      expect(dllFiles(d)).toEqual({ active: false, pending: true });
+    } finally {
+      chmodSync(d, 0o755);
+    }
   });
 });

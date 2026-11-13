@@ -70,7 +70,7 @@ export const BINARY_NOTICES = {
     [/^ffmpeg\.dll$/, 'chromium:ffmpeg'],
     [/^vk_swiftshader\.dll$/, 'chromium:SwiftShader'],
     [/^vulkan-1\.dll$/, 'chromium:Vulkan Loader Components'],
-    [/^d3dcompiler_47\.dll$/, 'supplement:d3dcompiler'],
+    [/^d3dcompiler_47\.dll(\.terms-pending)?$/, 'supplement:d3dcompiler'],
     [/^dxcompiler\.dll$/, 'chromium:DirectX-Shader-Compiler'],
     [/^resources\/bin\/zeyvola-win\.exe$/, 'own'],
   ],
@@ -282,7 +282,10 @@ export async function audit(dir, profile, { probe = false, release = false } = {
 
     // 3e) Microsoft's d3dcompiler_47.dll: while it ships, the app must show its user terms before
     // first use (apps/desktop/src/main/windows-terms.ts), and two decisions belong to the licensor.
-    if (existsSync(join(dir, 'd3dcompiler_47.dll'))) {
+    // It must ship as "d3dcompiler_47.dll.terms-pending" (renamed only after acceptance), never
+    // under its real name, which Chromium's GPU process would load before the terms are answered.
+    if (existsSync(join(dir, 'd3dcompiler_47.dll'))) fails.push('Windows paketinde d3dcompiler_47.dll asıl adıyla duruyor: koşullar kabul edilmeden yüklenebilir (beklenen ad d3dcompiler_47.dll.terms-pending)');
+    if (existsSync(join(dir, 'd3dcompiler_47.dll.terms-pending')) || existsSync(join(dir, 'd3dcompiler_47.dll'))) {
       const decision = JSON.parse(readFileSync(join(ROOT, 'tools', 'windows-terms.json'), 'utf8'));
       const shipped = join(L.resources, 'licenses', 'MICROSOFT-D3DCOMPILER-TERMS.txt');
       const source = join(ROOT, decision.termsFile);

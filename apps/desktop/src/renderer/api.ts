@@ -63,8 +63,11 @@ export const api = {
   /** Opens the system save dialog; null when the user closed it. */
   exportChooseTarget: (projectId: string, suggestedName: string, extension: 'mp4' | 'webm') =>
     call<ExportTarget | null>('export:chooseTarget', { projectId, suggestedName, extension }),
-  /** Windows only: whether the helper can write MP4 with Media Foundation (probed once per run). */
-  exportEncoderInfo: () => call<EncoderInfo>('export:encoderInfo'),
+  /**
+   * The export route a test run forces, and with `probe` (Windows) whether the helper can write
+   * MP4 with Media Foundation (a small test encode, once per run).
+   */
+  exportEncoderInfo: (probe: boolean) => call<EncoderInfo>('export:encoderInfo', { probe }),
   exportMfBegin: (token: string, o: { width: number; height: number; fps: number; bitrate: number; audio: boolean }) =>
     call<{ exportId: string; path: string }>('export:mfBegin', { token, ...o }),
   exportMfWrite: (exportId: string, kind: 'video' | 'audio', time: number, duration: number, data: Uint8Array) =>

@@ -25,7 +25,7 @@ import { suiteFromArgv } from '../shared/test-suite';
 import { getLastExportFolder, loadSettings, onSettingsChanged, setLastExportFolder, settingsInfo, tm, updateSettings } from './settings';
 import { ProjectStore } from './projects';
 import { createCaptureWindow, createMainWindow, hideHud, hudWindow, showHud } from './windows';
-import { askForTerms, microsoftDllPresent, recordAcceptance, termsAccepted, termsNeeded } from './windows-terms';
+import { activateDll, askForTerms, dllFiles, recordAcceptance, startupAction, tellActivationFailed, termsAccepted } from './windows-terms';
 
 // Test suites (shared/test-suite.ts) all run like the smoke test: temporary projects folder,
 // synthetic devices, test-only channels. SUITE says which one the renderer runs.
@@ -47,10 +47,15 @@ if (SMOKE) {
 }
 
 if (!SMOKE && !CODEC_PROBE && !app.requestSingleInstanceLock()) app.quit();
-// Windows: Microsoft's d3dcompiler_47.dll is not used before its terms are accepted
-// (windows-terms.ts). Without hardware acceleration Chromium does not load it.
-const TERMS_PENDING = !SMOKE && !CODEC_PROBE && termsNeeded(process.platform, microsoftDllPresent(), termsAccepted(app.getPath('userData')));
-if (TERMS_PENDING) app.disableHardwareAcceleration();
+// Windows: Microsoft's d3dcompiler_47.dll ships as "d3dcompiler_47.dll.terms-pending" and gets its
+// real name only after its terms are accepted (windows-terms.ts), so no process can load the
+// shipped copy before. Accepted earlier (an update brought the pending name again): rename it now,
+// before the app is ready, and restart once. If that fails the app starts as it is and says so.
+const TERMS_ACTION = SMOKE || CODEC_PROBE ? 'none' : startupAction(process.platform, dllFiles(), termsAccepted(app.getPath('userData')));
+const TERMS_PENDING = TERMS_ACTION === 'ask';
+const ACTIVATION = TERMS_ACTION === 'activate' ? activateDll() : null;
+const RESTART_FOR_DLL = ACTIVATION?.ok === true;
+if (TERMS_PENDING || RESTART_FOR_DLL) app.disableHardwareAcceleration();
 
 let mainWindow: BrowserWindow | null = null;
 let store: ProjectStore;
@@ -298,11 +303,11 @@ function registerIpc(): void {
     wc.setBackgroundThrottling(false);
     sleepBlocker ??= powerSaveBlocker.start('prevent-app-suspension');
   };
-  handleNoArgs('export:encoderInfo', async (): Promise<EncoderInfo> => {
+  handle('export:encoderInfo', async ({ probe }): Promise<EncoderInfo> => {
     const forced = SMOKE ? process.env.ZEYVOLA_TEST_EXPORT_ROUTE : undefined;
     const route = forced === 'mf' || forced === 'webm' ? forced : undefined;
-    if (process.platform !== 'win32') return { mf: { available: false, reason: 'platform' }, ...(route ? { route } : {}) };
-    return { mf: await mfExports.probe(), ...(route ? { route } : {}) };
+    const mf = process.platform !== 'win32' ? { available: false, reason: 'platform' } : probe ? await mfExports.probe() : { available: false, reason: 'not-probed' };
+    return { mf, ...(route ? { route } : {}) };
   });
   handle('export:mfBegin', async ({ token, width, height, fps, bitrate, audio }, e) => {
     const target = exportTargets.take(token);
@@ -567,14 +572,22 @@ async function boot(): Promise<void> {
   }
   await loadSettings(SMOKE ? { ephemeral: true, language: 'tr' } : {});
   if (TERMS_PENDING) {
-    // Accept: remember it and start again with hardware acceleration. Decline: quit.
+    // Accept: remember it, give the DLL its real name and start again with hardware acceleration
+    // (a failed rename is reported by that next start). Decline: quit; the DLL keeps its pending name.
     if (await askForTerms()) {
       recordAcceptance(app.getPath('userData'));
+      activateDll();
       app.relaunch();
     }
     app.exit(0);
     return;
   }
+  if (RESTART_FOR_DLL) {
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+  if (ACTIVATION && !ACTIVATION.ok) await tellActivationFailed(ACTIVATION.dir);
   onSettingsChanged((info) => {
     broadcast('settings:changed', info);
     updateRecordingChrome();

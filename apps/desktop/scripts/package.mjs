@@ -171,12 +171,16 @@ if (platform === 'darwin') {
   // D3D12 backend only. Zeyvola renders with WebGL2, so they are left out; dxil.dll would otherwise
   // bring Microsoft's DXC license terms (end-user terms protecting Microsoft, indemnification).
   // d3dcompiler_47.dll stays: WebGL on Windows compiles shaders with it (Microsoft: not a system
-  // component, redistributed side by side). Not tested on Windows yet.
+  // component, redistributed side by side). It ships as "d3dcompiler_47.dll.terms-pending", a name
+  // Windows' loader never looks for, and gets its real name only after the user has accepted
+  // Microsoft's terms (apps/desktop/src/main/windows-terms.ts). Unsigned today; Authenticode signs
+  // each file on its own, so the later rename keeps a file signature (a catalog would need a new look).
   for (const f of ['dxil.dll', 'dxcompiler.dll']) rmSync(join(out, f), { force: true });
+  if (existsSync(join(out, 'd3dcompiler_47.dll'))) renameSync(join(out, 'd3dcompiler_47.dll'), join(out, 'd3dcompiler_47.dll.terms-pending'));
   // Test build only (--omit-d3dcompiler): without the bundled Microsoft DLL, Chromium has to use
   // Windows' own copy or another ANGLE backend (start with --use-angle=vulkan), and the app shows
   // no Microsoft terms. Whether WebGL2 and export work this way is untested on real Windows.
-  if (process.argv.includes('--omit-d3dcompiler')) rmSync(join(out, 'd3dcompiler_47.dll'), { force: true });
+  if (process.argv.includes('--omit-d3dcompiler')) rmSync(join(out, 'd3dcompiler_47.dll.terms-pending'), { force: true });
   // One helper for mouse buttons (--input) and imported videos' AAC sound (--extract-audio,
   // Media Foundation → WAV). Built with zig from native/helper-windows, no C runtime linked.
   shipHelper('helper-windows', 'zeyvola-win.exe');

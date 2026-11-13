@@ -217,6 +217,7 @@ export const ExportBegin = z.object({ token: ExportTargetToken });
 export interface EncoderInfo {
   /** `profile`: the H.264 profile Windows' encoder accepted ("high", else "baseline"). */
   mf: { available: boolean; reason?: string; profile?: string };
+  /** Test runs only. Answered without the probe, so a forced route works on any machine. */
   route?: 'mf' | 'webm';
 }
 
@@ -262,6 +263,7 @@ export const Schemas = {
   'export:defaultTarget': ExportTargetRequest,
   'export:chooseTarget': ExportTargetRequest,
   'export:begin': ExportBegin,
+  'export:encoderInfo': z.object({ probe: z.boolean() }),
   'export:mfBegin': ExportMfBegin,
   'export:mfWrite': ExportMfWrite,
   'export:write': ExportWrite,

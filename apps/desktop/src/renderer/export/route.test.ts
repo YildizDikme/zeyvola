@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseRoute, nv12Size, rgbaToNv12, toPcm16Stereo, writtenFormat, type RouteFacts } from './route';
+import { chooseRoute, needsMfProbe, nv12Size, rgbaToNv12, toPcm16Stereo, writtenFormat, type RouteFacts } from './route';
 
 const facts = (o: Partial<RouteFacts>): RouteFacts => ({
   format: 'mp4', platform: 'win32', includeAudio: true, hardwareH264: true, webCodecsAac: true, mfAvailable: true, webmOffered: true, ...o,
@@ -36,6 +36,19 @@ describe('export route', () => {
   it('test runs can force a path; a forced helper path still needs the helper', () => {
     expect(chooseRoute(facts({ forced: 'mf' }))).toEqual({ kind: 'mf' });
     expect(chooseRoute(facts({ forced: 'mf', mfAvailable: false }))).toEqual({ kind: 'webcodecs' });
+    expect(chooseRoute(facts({ forced: 'webm' }))).toEqual({ kind: 'webm-fallback', reason: 'forced' });
+  });
+
+  it('asks the Windows helper only when WebCodecs cannot write the MP4, or when a test forces it', () => {
+    const p = (o: Partial<RouteFacts>) => needsMfProbe(facts(o));
+    expect(p({})).toBe(false); // hardware H.264 + AAC: no helper run in normal use
+    expect(p({ hardwareH264: false })).toBe(true);
+    expect(p({ webCodecsAac: false })).toBe(true);
+    expect(p({ webCodecsAac: false, includeAudio: false })).toBe(false);
+    expect(p({ format: 'webm', hardwareH264: false })).toBe(false);
+    expect(p({ forced: 'mf' })).toBe(true); // forced helper path even with hardware
+    expect(p({ forced: 'webm' })).toBe(false); // the forced WebM fallback needs no probe…
+    // …and still wins over the hardware encoder.
     expect(chooseRoute(facts({ forced: 'webm' }))).toEqual({ kind: 'webm-fallback', reason: 'forced' });
   });
 

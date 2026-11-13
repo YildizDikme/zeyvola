@@ -45,6 +45,17 @@ export function chooseRoute(f: RouteFacts): ExportRoute {
   return f.webmOffered ? { kind: 'webm-fallback', reason } : { kind: 'unsupported', reason };
 }
 
+/**
+ * Whether the Windows helper has to be asked (it runs a small test encode): only when WebCodecs
+ * cannot write the MP4 itself, or when a test run forces the helper path. A route forced by a
+ * test run is read in every case (main answers that without the probe).
+ */
+export function needsMfProbe(f: Pick<RouteFacts, 'format' | 'includeAudio' | 'hardwareH264' | 'webCodecsAac' | 'forced'>): boolean {
+  if (f.format !== 'mp4') return false;
+  if (f.forced === 'mf') return true;
+  return !(f.hardwareH264 && (!f.includeAudio || f.webCodecsAac));
+}
+
 /** The format actually written: WebM when the route stands in for MP4. */
 export function writtenFormat(format: ExportFormat, route: ExportRoute): ExportFormat {
   return route.kind === 'webm-fallback' ? 'webm' : format;
