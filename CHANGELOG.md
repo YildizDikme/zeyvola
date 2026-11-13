@@ -27,4 +27,4 @@ Bu dosya Zeyvola'nın sürümlerindeki önemli değişiklikleri listeler.
 
 ### Bilinen sınırlar / Known limits
 - Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür. *With the "Fallback" (browser) recording method, system audio is not recorded and the cursor is part of the video.*
-- MP4 dışa aktarma cihazda H.264 donanım kodlayıcısı ve AAC kodlayıcısı ister; yoksa WebM kullanılır. *MP4 export needs a hardware H.264 encoder and an AAC encoder on the device; without them, use WebM.*
+- MP4 dışa aktarma için ekran kartının H.264 kodlayıcısı yoksa: Windows'ta Windows'un yazılım kodlayıcısı kullanılır (daha yavaş); o da yoksa video WebM olarak kaydedilir ve bu açıkça söylenir. *If the graphics card has no H.264 encoder: on Windows, Windows' software encoder is used (slower); otherwise the video is saved as WebM and the app says so.*

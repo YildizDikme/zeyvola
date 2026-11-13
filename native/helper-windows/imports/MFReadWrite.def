@@ -1,3 +1,4 @@
 LIBRARY MFReadWrite.dll
 EXPORTS
+MFCreateSinkWriterFromURL
 MFCreateSourceReaderFromURL

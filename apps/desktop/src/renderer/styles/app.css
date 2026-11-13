@@ -412,6 +412,8 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 /* Long folders keep their end (the folder's own name) visible. */
 .export-target-text span { text-align: left; }
 .export-unsupported > div { display: grid; gap: 8px; justify-items: start; }
+.export-encoder { margin: 2px 0 0; }
+.export-fallback-done { color: var(--warning); }
 
 
 /* ── Polish layer (palette v2) ────────────────────────────────────────── */

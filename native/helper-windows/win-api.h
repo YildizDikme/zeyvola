@@ -129,6 +129,22 @@ static const GUID MF_MT_SUBTYPE = { 0xf7e34c9a, 0x42e8, 0x4714, { 0xb7, 0x4b, 0x
 static const GUID MF_MT_AUDIO_BITS_PER_SAMPLE = { 0xf2deb57f, 0x40fa, 0x4764, { 0xaa, 0x33, 0xed, 0x4f, 0x2d, 0x1f, 0xf6, 0x69 } };
 static const GUID MF_MT_AUDIO_SAMPLES_PER_SECOND = { 0x5faeeae7, 0x0290, 0x4c31, { 0x9e, 0x8a, 0xc5, 0x34, 0xf6, 0x8d, 0x9d, 0xba } };
 static const GUID MF_MT_AUDIO_NUM_CHANNELS = { 0x37e48bf5, 0x645e, 0x4c5b, { 0x89, 0xde, 0xad, 0xa9, 0xe2, 0x9b, 0x69, 0x6a } };
+// Video keys and types for the MP4 export (the same values tests/media-check/mf-check.ps1 uses on Windows).
+static const GUID MF_MT_FRAME_SIZE = { 0x1652c33d, 0xd6b2, 0x4012, { 0xb8, 0x34, 0x72, 0x03, 0x08, 0x49, 0xa3, 0x7d } };
+static const GUID MF_MT_FRAME_RATE = { 0xc459a2e8, 0x3d2c, 0x4e44, { 0xb1, 0x32, 0xfe, 0xe5, 0x15, 0x6c, 0x7b, 0xb0 } };
+static const GUID MF_MT_PIXEL_ASPECT_RATIO = { 0xc6376a1e, 0x8d0a, 0x4027, { 0xbe, 0x45, 0x6d, 0x9a, 0x0a, 0xd3, 0x9b, 0xb6 } };
+static const GUID MF_MT_INTERLACE_MODE = { 0xe2724bb8, 0xe676, 0x4806, { 0xb4, 0xb2, 0xa8, 0xd6, 0xef, 0xb4, 0x4c, 0xcd } };
+static const GUID MF_MT_AVG_BITRATE = { 0x20332624, 0xfb0d, 0x4d9e, { 0xbd, 0x0d, 0xcb, 0xf6, 0x78, 0x6c, 0x10, 0x2e } };
+static const GUID MFMediaType_Video = { 0x73646976, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
+static const GUID MFVideoFormat_NV12 = { 0x3231564e, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
+static const GUID MFVideoFormat_H264 = { 0x34363248, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
+#define MFVideoInterlace_Progressive 2u
+// From Microsoft's win32metadata (github.com/microsoft/win32metadata, commit 15fc870a, files
+// generation/WinSDK/RecompiledIdlHeaders/um/mfapi.h and codecapi.h), read 2026-11-13. Only these
+// values were taken; Microsoft Learn names them but does not print them.
+static const GUID MF_MT_AUDIO_AVG_BYTES_PER_SECOND = { 0x1aab75c8, 0xcfef, 0x451c, { 0xab, 0x95, 0xac, 0x03, 0x4b, 0x8e, 0x17, 0x31 } };
+static const GUID MF_MT_MPEG2_PROFILE = { 0xad76a80b, 0x2d5c, 0x4e0b, { 0xb3, 0x75, 0x64, 0xe5, 0x20, 0x13, 0x70, 0x36 } };
+#define eAVEncH264VProfile_High 100u
 static const GUID MFMediaType_Audio = { 0x73647561, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
 static const GUID MFAudioFormat_Dolby_AC3 = { 0xe06d802c, 0xdb46, 0x11cf, { 0xb4, 0xd1, 0x00, 0x80, 0x5f, 0x6c, 0xbb, 0xea } };
 // Audio subtypes built from a WAVE format tag: {tag-0000-0010-8000-00AA00389B71}.
@@ -161,7 +177,8 @@ typedef struct IMFSourceReader IMFSourceReader;
     HRESULT (*GetGUID)(void *self, const GUID *key, GUID *value); \
     Slot GetStringLength, GetString, GetAllocatedString, GetBlobSize, GetBlob, GetAllocatedBlob, GetUnknown, SetItem, DeleteItem, DeleteAllItems; \
     HRESULT (*SetUINT32)(void *self, const GUID *key, UINT32 value); \
-    Slot SetUINT64, SetDouble; \
+    HRESULT (*SetUINT64)(void *self, const GUID *key, ULONGLONG value); \
+    Slot SetDouble; \
     HRESULT (*SetGUID)(void *self, const GUID *key, const GUID *value); \
     Slot SetString, SetBlob, SetUnknown, LockStore, UnlockStore, GetCount, GetItemByIndex, CopyAllItems;
 
@@ -170,9 +187,14 @@ struct IMFMediaType { const struct { ATTRIBUTE_SLOTS Slot GetMajorType, IsCompre
 struct IMFSample {
     const struct {
         ATTRIBUTE_SLOTS
-        Slot GetSampleFlags, SetSampleFlags, GetSampleTime, SetSampleTime, GetSampleDuration, SetSampleDuration, GetBufferCount, GetBufferByIndex;
+        Slot GetSampleFlags, SetSampleFlags, GetSampleTime;
+        HRESULT (*SetSampleTime)(void *self, LONGLONG time);
+        Slot GetSampleDuration;
+        HRESULT (*SetSampleDuration)(void *self, LONGLONG duration);
+        Slot GetBufferCount, GetBufferByIndex;
         HRESULT (*ConvertToContiguousBuffer)(void *self, IMFMediaBuffer **out);
-        Slot AddBuffer, RemoveBufferByIndex, RemoveAllBuffers, GetTotalLength, CopyToBuffer;
+        HRESULT (*AddBuffer)(void *self, IMFMediaBuffer *buffer);
+        Slot RemoveBufferByIndex, RemoveAllBuffers, GetTotalLength, CopyToBuffer;
     } *v;
 };
 
@@ -181,7 +203,9 @@ struct IMFMediaBuffer {
         UNKNOWN_SLOTS
         HRESULT (*Lock)(void *self, BYTE **data, DWORD *max, DWORD *current);
         HRESULT (*Unlock)(void *self);
-        Slot GetCurrentLength, SetCurrentLength, GetMaxLength;
+        Slot GetCurrentLength;
+        HRESULT (*SetCurrentLength)(void *self, DWORD length);
+        Slot GetMaxLength;
     } *v;
 };
 
@@ -199,11 +223,30 @@ struct IMFSourceReader {
     } *v;
 };
 
+// IMFSinkWriter (MP4 export with Windows' own H.264 and AAC encoders). Slot order checked on a real
+// Windows machine by tests/media-check/mf-check.ps1 (AddStream 3 … Finalize 11).
+typedef struct IMFSinkWriter IMFSinkWriter;
+struct IMFSinkWriter {
+    const struct {
+        UNKNOWN_SLOTS
+        HRESULT (*AddStream)(void *self, IMFMediaType *target, DWORD *stream);
+        HRESULT (*SetInputMediaType)(void *self, DWORD stream, IMFMediaType *input, void *encoding_params);
+        HRESULT (*BeginWriting)(void *self);
+        HRESULT (*WriteSample)(void *self, DWORD stream, IMFSample *sample);
+        Slot SendStreamTick, PlaceMarker, NotifyEndOfSegment, Flush;
+        HRESULT (*Finalize)(void *self);
+        Slot GetServiceForStream, GetStatistics;
+    } *v;
+};
+
 #define COM_CALL(obj, method, ...) ((obj)->v->method((obj), ##__VA_ARGS__))
 
 HRESULT MFStartup(DWORD version, DWORD flags);
 HRESULT MFShutdown(void);
 HRESULT MFCreateMediaType(IMFMediaType **out);
 HRESULT MFCreateSourceReaderFromURL(const WCHAR *url, void *attributes, IMFSourceReader **out);
+HRESULT MFCreateSinkWriterFromURL(const WCHAR *url, void *byte_stream, void *attributes, IMFSinkWriter **out);
+HRESULT MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **out);
+HRESULT MFCreateSample(IMFSample **out);
 
 #endif

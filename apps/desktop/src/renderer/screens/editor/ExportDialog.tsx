@@ -39,16 +39,19 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
   const [targetRound, setTargetRound] = useState(0);
   const [support, setSupport] = useState<ExportSupport | null>(null);
   const baseName = customName ?? exportBaseName(project, variantId);
+  // WebM stands in for MP4 when this computer has no H.264 encoder at all (route.ts); the target
+  // then carries .webm, so the name shown is the file written.
+  const written: ExportFormat = support?.ok ? support.written : format;
 
   useEffect(() => {
     if (busy) return;
     let live = true;
-    api.exportDefaultTarget(project.id, baseName, format)
+    api.exportDefaultTarget(project.id, baseName, written)
       .then((tg) => { if (live) { setTarget(tg); setTargetError(null); } })
       .catch((e: Error) => { if (live) setTargetError(e.message); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetched only when the name, format or round changes
-  }, [project.id, baseName, format, targetRound]);
+  }, [project.id, baseName, written, targetRound]);
 
   // Can this device write the chosen format at all? Asked before the export, never discovered halfway.
   useEffect(() => {
@@ -60,7 +63,7 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
 
   const chooseTarget = async () => {
     try {
-      const tg = await api.exportChooseTarget(project.id, baseName, format);
+      const tg = await api.exportChooseTarget(project.id, baseName, written);
       if (!tg) return;
       setTarget(tg);
       setTargetError(null);
@@ -105,7 +108,7 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
   const start = async () => {
     if (!target) return;
     abort.current = new AbortController();
-    const opts: ExportOptions = { variantId, format, resolution, fps, quality, includeAudio: audio, target };
+    const opts: ExportOptions = { variantId, format, resolution, fps, quality, includeAudio: audio, target, ...(support?.ok ? { route: support.route } : {}) };
     setProgress({ phase: 'preparing', frame: 0, total: 0, rate: 0, etaSeconds: 0 });
     try {
       await runExport(project, cursors, mediaBase, opts, setProgress, abort.current.signal);
@@ -117,7 +120,7 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
       setTargetRound((n) => n + 1);
     }
   };
-  const canStart = confirmed && !!target && support?.ok === true;
+  const canStart = confirmed && !!target && support?.ok === true && target.name.toLowerCase().endsWith(`.${written}`);
 
   // Leaving the editor stops a running export; its partial file is deleted.
   useEffect(() => () => abort.current?.abort(), []);
@@ -154,6 +157,13 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
             <Segmented<'standard' | 'high'> value={quality} onChange={setQuality} label={t("Kalite")} options={[{ value: 'standard', label: t("Standart") }, { value: 'high', label: t("Yüksek") }]} />
             <Toggle label={t("Sesi dahil et")} checked={audio} onChange={setAudio} />
             <p className="muted small mono">{size.width}×{size.height} · {fps} fps</p>
+            {support?.ok && support.notice && (
+              <p className="note is-warning export-fallback">
+                <Icon name="warning" size={14} />
+                <span>{support.notice} {target ? t("Kaydedilecek dosya: {name}", { name: target.name }) : ''}</span>
+              </p>
+            )}
+            {support?.ok && <p className="muted small export-encoder">{t("Kodlayıcı: {encoder}", { encoder: support.encoder })}</p>}
             {support && !support.ok && (
               <div className="note is-error export-unsupported">
                 <Icon name="warning" size={14} />
@@ -210,6 +220,7 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
                   <Icon name="check" size={18} />
                   <span title={progress.path}>{t("Hazır")}{progress.bytes ? ` · ${(progress.bytes / 1024 / 1024).toFixed(1)} MB` : ''}</span>
                   {progress.path && <Button size="sm" icon="folder" onClick={() => api.showItem(progress.path!)}>{t("Klasörde göster")}</Button>}
+                  {progress.fallback && <span className="export-fallback-done small">{t("MP4 yerine WebM olarak kaydedildi.")}</span>}
                 </div>
               ) : progress.phase === 'error' ? (
                 <p className="note is-error"><Icon name="warning" size={14} />{progress.message}</p>
@@ -217,6 +228,7 @@ export function ExportDialog({ store, onClose }: { store: EditorStore; player: P
                 <span className="muted">{t("İptal edildi; yarım dosya silindi.")}</span>
               ) : (
                 <>
+                  {progress.fallback && <span className="note is-warning small"><Icon name="warning" size={14} />{progress.fallback}</span>}
                   <div className="bar"><span style={{ width: `${pct * 100}%` }} /></div>
                   <span className="muted small mono">
                     {progress.phase === 'audio' ? t("Ses hazırlanıyor…") : progress.phase === 'finishing' ? t("Dosya tamamlanıyor…") : t("{frame}/{total} kare · {rate} kare/sn · kalan {eta}", { frame: progress.frame, total: progress.total, rate: progress.rate.toFixed(1), eta: durationText(progress.etaSeconds) })}

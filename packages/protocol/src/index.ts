@@ -209,6 +209,38 @@ export const ExportTargetRequest = z.object({
 
 export const ExportBegin = z.object({ token: ExportTargetToken });
 
+/**
+ * What can write MP4 besides the renderer's own (hardware) encoders: on Windows, the helper with
+ * Windows' Media Foundation encoders. `route` is set only in test runs (ZEYVOLA_TEST_EXPORT_ROUTE)
+ * to force a path of the export decision.
+ */
+export interface EncoderInfo {
+  /** `profile`: the H.264 profile Windows' encoder accepted ("high", else "baseline"). */
+  mf: { available: boolean; reason?: string; profile?: string };
+  route?: 'mf' | 'webm';
+}
+
+const Even = (max: number) => z.number().int().min(16).max(max).refine((n) => n % 2 === 0, 'tek sayı');
+
+/** Starts an MP4 export through the Windows helper (Media Foundation), at the place `token` names. */
+export const ExportMfBegin = z.object({
+  token: ExportTargetToken,
+  width: Even(8192),
+  height: Even(8192),
+  fps: z.number().int().min(1).max(240),
+  bitrate: z.number().int().min(1).max(500_000_000),
+  audio: z.boolean(),
+});
+
+/** One NV12 frame or a block of 16-bit stereo PCM for an export started with export:mfBegin. Times in 100 ns. */
+export const ExportMfWrite = z.object({
+  exportId: z.string().regex(/^mf_[0-9a-f-]{36}$/),
+  kind: z.enum(['video', 'audio']),
+  time: z.number().int().min(0),
+  duration: z.number().int().min(0),
+  data: z.instanceof(Uint8Array),
+});
+
 export const ExportWrite = z.object({
   exportId: z.string().min(8).max(80),
   position: z.number().int().min(0).nullable(),
@@ -230,6 +262,8 @@ export const Schemas = {
   'export:defaultTarget': ExportTargetRequest,
   'export:chooseTarget': ExportTargetRequest,
   'export:begin': ExportBegin,
+  'export:mfBegin': ExportMfBegin,
+  'export:mfWrite': ExportMfWrite,
   'export:write': ExportWrite,
   'export:end': z.object({ exportId: z.string().min(8).max(80), cancel: z.boolean().default(false) }),
   'shell:showItem': z.object({ path: z.string().min(1).max(4096) }),

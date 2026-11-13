@@ -1,5 +1,5 @@
 import type {
-  AppInfo, BackendInfo, CaptureConfig, CaptureResult, CaptureState, OpenedProject, PermissionInfo, ProjectSummary, RecoveryNotice, SourceInfo, ImportedVideo, PickedFile, ThirdPartyInfo, ExportTarget,
+  AppInfo, BackendInfo, CaptureConfig, CaptureResult, CaptureState, OpenedProject, PermissionInfo, ProjectSummary, RecoveryNotice, SourceInfo, ImportedVideo, PickedFile, ThirdPartyInfo, ExportTarget, EncoderInfo,
 } from '@zeyvola/protocol';
 import type { LangSetting, SettingsInfo } from '../shared/i18n';
 
@@ -63,6 +63,12 @@ export const api = {
   /** Opens the system save dialog; null when the user closed it. */
   exportChooseTarget: (projectId: string, suggestedName: string, extension: 'mp4' | 'webm') =>
     call<ExportTarget | null>('export:chooseTarget', { projectId, suggestedName, extension }),
+  /** Windows only: whether the helper can write MP4 with Media Foundation (probed once per run). */
+  exportEncoderInfo: () => call<EncoderInfo>('export:encoderInfo'),
+  exportMfBegin: (token: string, o: { width: number; height: number; fps: number; bitrate: number; audio: boolean }) =>
+    call<{ exportId: string; path: string }>('export:mfBegin', { token, ...o }),
+  exportMfWrite: (exportId: string, kind: 'video' | 'audio', time: number, duration: number, data: Uint8Array) =>
+    call<void>('export:mfWrite', { exportId, kind, time, duration, data }),
   exportBegin: (token: string) => call<{ exportId: string; path: string }>('export:begin', { token }),
   exportWrite: (exportId: string, position: number | null, data: Uint8Array) => call<void>('export:write', { exportId, position, data }),
   exportEnd: (exportId: string, cancel = false) => call<{ path: string; bytes: number } | null>('export:end', { exportId, cancel }),

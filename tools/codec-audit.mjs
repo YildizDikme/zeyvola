@@ -259,8 +259,10 @@ export async function audit(dir, profile, { probe = false, release = false } = {
       ['VideoToolbox', 'ScreenCaptureKit', 'AVVideoCodec', 'avc1', 'hvc1', 'AppKit'], fails);
   }
   // 3d) Windows helper (--input: mouse buttons, and for window recordings the window's frame
-  // through dwmapi; --extract-audio: imported videos' sound through Media Foundation). Only these
-  // system DLLs; no encoder, keyboard or network functions.
+  // through dwmapi; --extract-audio: imported videos' sound through Media Foundation;
+  // --encode-mp4: MP4 export with Windows' own H.264 / AAC encoders through the Sink Writer, when
+  // no hardware H.264 encoder is available). Only these system DLLs; the one encoder entry point
+  // allowed is MFCreateSinkWriterFromURL, no keyboard or network functions.
   if (L.platform === 'win32') {
     const exe = join(L.resources, 'bin', 'zeyvola-win.exe');
     const check = { present: existsSync(exe) };
@@ -269,7 +271,8 @@ export async function audit(dir, profile, { probe = false, release = false } = {
       check.dlls = imports.map((i) => i.dll);
       check.notAllowed = check.dlls.filter((d) => !/^(kernel32|user32|shell32|ole32|dwmapi|mfplat|mfreadwrite)\.dll$/i.test(d));
       check.functions = imports.flatMap((i) => i.functions);
-      check.forbiddenFunctions = check.functions.filter((f) => /SinkWriter|Transcode|Encoder|KeyState|KeyboardState|RawInput|WH_KEYBOARD|socket|Internet|WinHttp/i.test(f));
+      const ALLOWED_ENCODE = new Set(['MFCreateSinkWriterFromURL']);
+      check.forbiddenFunctions = check.functions.filter((f) => !ALLOWED_ENCODE.has(f) && /SinkWriter|Transcode|Encoder|KeyState|KeyboardState|RawInput|WH_KEYBOARD|socket|Internet|WinHttp/i.test(f));
       if (!check.functions.length) fails.push('Windows yardımcısının içe aktardığı işlevler okunamadı');
       if (check.notAllowed.length) fails.push(`Windows yardımcısı izin verilmeyen DLL'lere bağlı: ${check.notAllowed.join(', ')}`);
       if (check.forbiddenFunctions.length) fails.push(`Windows yardımcısında yasak işlevler var: ${check.forbiddenFunctions.join(', ')}`);

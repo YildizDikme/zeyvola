@@ -1,5 +1,7 @@
 LIBRARY MFPlat.dll
 EXPORTS
 MFCreateMediaType
+MFCreateMemoryBuffer
+MFCreateSample
 MFShutdown
 MFStartup

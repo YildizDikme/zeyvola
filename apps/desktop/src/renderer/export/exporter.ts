@@ -5,10 +5,11 @@ import {
 } from '@zeyvola/project-model';
 import { TICKS_PER_SECOND, frameCount, frameToTicks, type Ticks } from '@zeyvola/timing';
 import { codecString, PROFILE, type ExportFormat, type ExportPlan } from '../../shared/distribution';
-import type { ExportTarget } from '@zeyvola/protocol';
+import type { EncoderInfo, ExportTarget } from '@zeyvola/protocol';
 import { api } from '../api';
 import { t } from '../i18n';
 import { probe } from '../perf-probe';
+import { chooseRoute, HNS, nv12Size, rgbaToNv12, toPcm16Stereo, writtenFormat, type ExportRoute } from './route';
 
 export type { ExportFormat };
 
@@ -21,6 +22,8 @@ export interface ExportOptions {
   includeAudio: boolean;
   /** Where to write (from api.exportDefaultTarget / exportChooseTarget); main's default folder when absent. */
   target?: ExportTarget;
+  /** Which encoder writes it (checkExportSupport); WebCodecs when absent. */
+  route?: ExportRoute;
 }
 
 export interface ExportProgress {
@@ -33,6 +36,10 @@ export interface ExportProgress {
   path?: string;
   bytes?: number;
   message?: string;
+  /** The format actually written (WebM when it stood in for MP4). */
+  written?: ExportFormat;
+  /** Set when WebM was written instead of MP4: why, in the user's language. */
+  fallback?: string;
 }
 
 const SAMPLE_RATE = 48_000;
@@ -107,24 +114,67 @@ function noAudioEncoder(format: ExportFormat): Error {
     : t("Bu cihazda Opus ses kodlayıcısı bulunamadı. Sesi kapatıp yeniden deneyin."));
 }
 
-export type ExportSupport = { ok: true; encoder: string } | { ok: false; message: string; suggestWebm: boolean };
+export type ExportSupport =
+  | { ok: true; encoder: string; route: ExportRoute; written: ExportFormat; notice?: string }
+  | { ok: false; message: string; suggestWebm: boolean };
+
+/** What main can offer besides WebCodecs (Windows: Media Foundation through the helper); asked once per window. */
+let encoderInfo: Promise<EncoderInfo> | null = null;
+function askEncoderInfo(): Promise<EncoderInfo> {
+  encoderInfo ??= api.exportEncoderInfo().catch(() => ({ mf: { available: false, reason: 'ipc' } }));
+  return encoderInfo;
+}
+
+/** Why WebM is written instead of MP4, for the export window (before) and its result line (after). */
+export function fallbackNotice(route: ExportRoute): string | undefined {
+  if (route.kind !== 'webm-fallback') return undefined;
+  return route.reason === 'no-aac'
+    ? t("Bu bilgisayarda MP4 için AAC ses kodlayıcısı yok. Video bu yüzden WebM (VP9 + Opus) olarak kaydedilecek.")
+    : t("Bu bilgisayarda MP4 için H.264 kodlayıcısı yok. Video bu yüzden WebM (VP9 + Opus) olarak kaydedilecek.");
+}
 
 /**
- * Asks the encoders before the export starts, so a device that cannot write the chosen format
- * hears it at once (and is offered WebM) instead of getting a different file than it asked for.
+ * Asks the encoders before the export starts and picks the route (route.ts): hardware H.264 →
+ * Windows' Media Foundation encoders through the helper → WebM instead of MP4, said plainly.
+ * A device never gets a different file than the window told it about.
  */
 export async function checkExportSupport(project: Project, o: Pick<ExportOptions, 'variantId' | 'format' | 'resolution' | 'fps' | 'quality' | 'includeAudio'>): Promise<ExportSupport> {
   const suggestWebm = o.format !== 'webm' && PROFILE.formats.includes('webm');
-  try {
-    const { width, height } = outputSize(project, o);
-    const bitrate = bitrateFor(width, height, o.fps, o.quality, planFor(o.format).video[0]?.bitrateScale ?? 1);
-    const { label } = await pickVideoConfig(o.format, width, height, o.fps, bitrate);
-    const audio = o.includeAudio ? await pickAudioConfig(o.format) : null;
-    if (o.includeAudio && !audio) throw noAudioEncoder(o.format);
-    return { ok: true, encoder: `${label}${audio ? ` + ${audio.codec === 'opus' ? 'Opus' : 'AAC'}` : ''}` };
-  } catch (e) {
-    return { ok: false, message: (e as Error).message, suggestWebm };
+  const webCodecs = async (format: ExportFormat): Promise<{ label: string } | { error: string }> => {
+    try {
+      const { width, height } = outputSize(project, o);
+      const bitrate = bitrateFor(width, height, o.fps, o.quality, planFor(format).video[0]?.bitrateScale ?? 1);
+      const { label } = await pickVideoConfig(format, width, height, o.fps, bitrate);
+      const audio = o.includeAudio ? await pickAudioConfig(format) : null;
+      if (o.includeAudio && !audio) throw noAudioEncoder(format);
+      return { label: `${label}${audio ? ` + ${audio.codec === 'opus' ? 'Opus' : 'AAC'}` : ''}` };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  };
+  if (o.format !== 'mp4') {
+    const r = await webCodecs(o.format);
+    return 'label' in r ? { ok: true, encoder: r.label, route: { kind: 'webcodecs' }, written: o.format } : { ok: false, message: r.error, suggestWebm };
   }
+  const { width, height } = outputSize(project, o);
+  const hardwareH264 = await pickVideoConfig('mp4', width, height, o.fps, bitrateFor(width, height, o.fps, o.quality, 1)).then(() => true, () => false);
+  const webCodecsAac = o.includeAudio ? (await pickAudioConfig('mp4')) !== null : true;
+  const info = hardwareH264 && webCodecsAac && !encoderInfo ? null : await askEncoderInfo();
+  const route = chooseRoute({
+    format: 'mp4', platform: window.zeyvola?.platform ?? '', includeAudio: o.includeAudio, hardwareH264, webCodecsAac,
+    mfAvailable: info?.mf.available ?? false, webmOffered: PROFILE.formats.includes('webm'), forced: info?.route,
+  });
+  if (route.kind === 'mf') {
+    return { ok: true, encoder: `${t("H.264 · Windows yazılım kodlayıcısı (daha yavaş)")}${o.includeAudio ? ' + AAC' : ''}`, route, written: 'mp4' };
+  }
+  if (route.kind === 'webm-fallback') {
+    const r = await webCodecs('webm');
+    if ('error' in r) return { ok: false, message: r.error, suggestWebm: false };
+    return { ok: true, encoder: r.label, route, written: 'webm', notice: fallbackNotice(route) };
+  }
+  if (route.kind === 'unsupported') return { ok: false, message: route.reason === 'no-aac' ? noAudioEncoder('mp4').message : t("Bu cihazda H.264 donanım kodlayıcısı bulunamadı, bu yüzden MP4 yazılamıyor. WebM biçimini kullanın."), suggestWebm: false };
+  const r = await webCodecs('mp4');
+  return 'label' in r ? { ok: true, encoder: r.label, route, written: 'mp4' } : { ok: false, message: r.error, suggestWebm };
 }
 
 /** Batches small appends into larger IPC writes. */
@@ -466,22 +516,141 @@ export async function waitForEncodeQueue(enc: QueueingEncoder, limit: number, fa
   failure.throwIfSet();
 }
 
+// ─── Route 2: Windows' Media Foundation encoders through the helper ────────────
+
+/**
+ * Renders like the WebCodecs path, but hands NV12 frames and 16-bit PCM to main, which pipes
+ * them to the Windows helper (main/mf-export.ts); the helper's Sink Writer encodes H.264 + AAC
+ * with Windows' own software encoders and writes the MP4. Sound is sent in step with the
+ * pictures so the Sink Writer never has to hold much of either.
+ */
+async function runMfExport(
+  project: Project,
+  cursors: Record<ID, PreparedCursor | undefined>,
+  mediaBase: string,
+  o: ExportOptions,
+  begin: { exportId: string; path: string },
+  size: { width: number; height: number; total: number },
+  report: (patch: Partial<ExportProgress>) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const { width, height, total } = size;
+  const fps = { num: o.fps, den: 1 };
+  const media = new ExportMedia(mediaBase, signal);
+  const comps = new CompositorHolder(() => newCanvasCompositor());
+  const id = begin.exportId;
+  try {
+    let pcm: [Float32Array, Float32Array] | null = null;
+    if (o.includeAudio) {
+      report({ phase: 'audio' });
+      pcm = await mixTimelineAudio(project, mediaBase, signal);
+    }
+    report({ phase: 'video' });
+    const rgba = new Uint8Array(width * height * 4);
+    const nv12 = new Uint8Array(nv12Size(width, height));
+    let audioAt = 0;
+    const block = 4800;
+    const sendAudioUntil = async (seconds: number) => {
+      while (pcm && audioAt < pcm[0].length && audioAt / SAMPLE_RATE < seconds) {
+        if (signal.aborted) throw abortError();
+        const n = Math.min(block, pcm[0].length - audioAt);
+        await api.exportMfWrite(id, 'audio', Math.round((audioAt * HNS) / SAMPLE_RATE), Math.round((n * HNS) / SAMPLE_RATE), toPcm16Stereo(pcm[0], pcm[1], audioAt, n));
+        audioAt += n;
+      }
+    };
+    const t0 = performance.now();
+    for (let n = 0; n < total; n++) {
+      if (signal.aborted) throw abortError();
+      const p0 = performance.now();
+      const plan = evaluate(project, frameToTicks(n, fps), { variantId: o.variantId, cursors, size: { width, height } });
+      const rec = plan.recordingId ? project.recordings[plan.recordingId] : undefined;
+      const [screen, camera] = await Promise.all([
+        rec?.sources.screen && plan.screen ? media.frameAt(rec.sources.screen.file, plan.screen.mediaTime / TICKS_PER_SECOND) : null,
+        rec?.sources.camera && plan.camera ? media.frameAt(rec.sources.camera.file, plan.camera.mediaTime / TICKS_PER_SECOND) : null,
+      ]);
+      const p1 = performance.now();
+      const frame = comps.draw((comp) => {
+        comp.render(plan, {
+          screen, screenSize: screen ? { width: screen.videoWidth, height: screen.videoHeight } : undefined,
+          camera, cameraSize: camera ? { width: camera.videoWidth, height: camera.videoHeight } : undefined,
+        });
+        return new VideoFrame(comp.canvas, { timestamp: Math.round((n * 1e6) / o.fps) });
+      }, (f) => f.close());
+      try {
+        await frame.copyTo(rgba, { format: 'RGBA', colorSpace: 'srgb' } as VideoFrameCopyToOptions);
+      } finally {
+        frame.close();
+      }
+      rgbaToNv12(rgba, width, height, nv12);
+      const p2 = performance.now();
+      await sendAudioUntil((n + 1) / o.fps);
+      await api.exportMfWrite(id, 'video', Math.round((n * HNS) / o.fps), Math.round(HNS / o.fps), nv12);
+      if (probe.on) {
+        const p3 = performance.now();
+        probe.record('export-source', p1 - p0);
+        probe.record('export-draw', p2 - p1);
+        probe.record('export-encode-wait', p3 - p2);
+        probe.record('export-frame', p3 - p0);
+      }
+      if (n % 5 === 0 || n === total - 1) {
+        const rate = (n + 1) / Math.max(0.001, (performance.now() - t0) / 1000);
+        report({ frame: n + 1, rate, etaSeconds: (total - n - 1) / Math.max(rate, 0.001) });
+      }
+    }
+    await sendAudioUntil(Infinity);
+    report({ phase: 'finishing' });
+    const end = await api.exportEnd(id);
+    report({ phase: 'done', path: end?.path, bytes: end?.bytes, written: 'mp4' });
+  } catch (e) {
+    await api.exportEnd(id, true).catch(() => undefined);
+    const aborted = signal.aborted || isAbort(e);
+    report({ phase: aborted ? 'cancelled' : 'error', message: aborted ? undefined : (e as Error).message });
+  } finally {
+    comps.dispose();
+    media.dispose();
+  }
+}
+
 // ─── Main pipeline ────────────────────────────────────────────────────────────
 
 export async function runExport(
   project: Project,
   cursors: Record<ID, PreparedCursor | undefined>,
   mediaBase: string,
-  o: ExportOptions,
+  options: ExportOptions,
   onProgress: (p: ExportProgress) => void,
   signal: AbortSignal,
 ): Promise<ExportProgress> {
-  const { width, height } = outputSize(project, o);
-  const fps = { num: o.fps, den: 1 };
+  const { width, height } = outputSize(project, options);
+  const fps = { num: options.fps, den: 1 };
   const total = frameCount(sequenceDuration(project), fps);
-  const frameUs = 1e6 / o.fps;
+  const frameUs = 1e6 / options.fps;
   const progress: ExportProgress = { phase: 'preparing', frame: 0, total, rate: 0, etaSeconds: 0 };
   const report = (patch: Partial<ExportProgress>) => { Object.assign(progress, patch); onProgress({ ...progress }); };
+
+  // Route 2 (Windows, Media Foundation). If the helper cannot even start its encoders, nothing
+  // was written yet: the export goes on as WebM (route 3) and says so.
+  let route: ExportRoute = options.route ?? { kind: 'webcodecs' };
+  let target = options.target;
+  if (route.kind === 'mf') {
+    target ??= await api.exportDefaultTarget(project.id, exportBaseName(project, options.variantId), 'mp4');
+    report({ encoder: `${t("H.264 · Windows yazılım kodlayıcısı (daha yavaş)")}${options.includeAudio ? ' + AAC' : ''}`, written: 'mp4' });
+    let begin: { exportId: string; path: string };
+    try {
+      begin = await api.exportMfBegin(target.token, { width, height, fps: options.fps, bitrate: bitrateFor(width, height, options.fps, options.quality, 1), audio: options.includeAudio });
+    } catch (e) {
+      route = { kind: 'webm-fallback', reason: 'no-h264' };
+      target = await api.exportDefaultTarget(project.id, target.name.replace(/\.[^.]+$/, ''), 'webm');
+      report({ fallback: `${fallbackNotice(route)} (${(e as Error).message})` });
+      begin = null as never;
+    }
+    if (route.kind === 'mf') {
+      await runMfExport(project, cursors, mediaBase, options, begin, { width, height, total }, report, signal);
+      return progress;
+    }
+  }
+  const o: ExportOptions = { ...options, format: writtenFormat(options.format, route), target };
+  if (route.kind === 'webm-fallback') report({ written: 'webm', fallback: progress.fallback ?? fallbackNotice(route) });
 
   const bitrate = bitrateFor(width, height, o.fps, o.quality, planFor(o.format).video[0]?.bitrateScale ?? 1);
   const { config: vConfig, label } = await pickVideoConfig(o.format, width, height, o.fps, bitrate);
@@ -490,8 +659,8 @@ export async function runExport(
   if (o.includeAudio && !aConfig) throw noAudioEncoder(o.format);
   report({ encoder: `${label}${aConfig ? ` + ${aConfig.codec === 'opus' ? 'Opus' : 'AAC'}` : ''}` });
 
-  const target = o.target ?? await api.exportDefaultTarget(project.id, exportBaseName(project, o.variantId), o.format);
-  const begin = await api.exportBegin(target.token);
+  const dest = o.target ?? await api.exportDefaultTarget(project.id, exportBaseName(project, o.variantId), o.format);
+  const begin = await api.exportBegin(dest.token);
   const { sink, flush } = bufferedSink(begin.exportId);
   const failure = new Failure();
   const media = new ExportMedia(mediaBase, signal);
@@ -631,7 +800,7 @@ export async function runExport(
     else await webm!.finish(Math.round(frameUs / 1000));
     await flush();
     const end = await api.exportEnd(begin.exportId);
-    report({ phase: 'done', path: end?.path, bytes: end?.bytes });
+    report({ phase: 'done', path: end?.path, bytes: end?.bytes, written: o.format });
   } catch (e) {
     // A closed encoder throws a generic InvalidStateError on encode(); report the cause instead.
     const err = (failure.error ?? e) as Error;

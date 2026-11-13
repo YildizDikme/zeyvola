@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -7,7 +8,7 @@ import {
   app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerSaveBlocker, shell, Tray, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions,
 } from 'electron';
 import type { ZodType } from 'zod';
-import { CaptureWorker, IMPORT_VIDEO_TYPES, Schemas, type AppInfo, type Channel, type CpuSample, type ExportTarget, type OpenedProject, type PickedFile, type ThirdPartyInfo } from '@zeyvola/protocol';
+import { CaptureWorker, IMPORT_VIDEO_TYPES, Schemas, type AppInfo, type Channel, type CpuSample, type EncoderInfo, type ExportTarget, type OpenedProject, type PickedFile, type ThirdPartyInfo } from '@zeyvola/protocol';
 import { newId, type Recording } from '@zeyvola/project-model';
 import { APP_NAME, PROJECTS_FOLDER } from '../shared/brand';
 import { migrateLegacyData } from './legacy-name';
@@ -15,6 +16,7 @@ import { CaptureManager } from './capture/manager';
 import { runCodecProbe } from './codec-probe';
 import { extractImportAudio } from './import-audio';
 import { exists } from './fsutil';
+import { MfExports } from './mf-export';
 import { displayFolder, ExportTargets, ExportWriter, safeBaseName, uniquePath, writableFolder, writeErrorMessage } from './export-writer';
 import { handleMediaProtocol, mediaBase, registerMediaScheme } from './media-protocol';
 import { getPermissions, openPermissionSettings, requestPermission } from './permissions';
@@ -104,6 +106,17 @@ async function waitForWindowsSettled(): Promise<void> {
   if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
 }
 const exportsWriter = new ExportWriter();
+/**
+ * MP4 export through Windows' own Media Foundation encoders, for a Windows computer whose renderer
+ * has no hardware H.264 encoder (renderer/export/route.ts). Windows only: the helper is
+ * native/helper-windows (zeyvola-win.exe --encode-mp4).
+ */
+const mfExports = new MfExports(() => {
+  if (process.platform !== 'win32') return null;
+  const exe = app.isPackaged ? join(process.resourcesPath, 'bin', 'zeyvola-win.exe') : resolve(app.getAppPath(), '..', '..', 'native', 'helper-windows', 'bin', 'zeyvola-win.exe');
+  return existsSync(exe) ? { command: exe, args: [] } : null;
+});
+const endExport = (exportId: string, cancel: boolean) => (exportId.startsWith('mf_') ? mfExports.end(exportId, cancel) : exportsWriter.end(exportId, cancel));
 
 function broadcast(channel: string, data: unknown): void {
   for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(channel, data);
@@ -218,7 +231,7 @@ function registerIpc(): void {
     for (const [id, owner] of [...exporting]) {
       if (owner !== wc) continue;
       releaseExport(id);
-      void exportsWriter.end(id, true).catch(() => undefined);
+      void endExport(id, true).catch(() => undefined);
     }
   };
   // Where exports go. The save dialog runs here; the renderer only gets a one-time token for the
@@ -271,6 +284,35 @@ function registerIpc(): void {
     // extension to was not asked about, so it is never replaced (it becomes "name (2)").
     return issueTarget(path, typed && await exists(path), true);
   });
+  const watchExport = async (exportId: string, wc: Electron.WebContents) => {
+    if (wc.isDestroyed()) {
+      await endExport(exportId, true);
+      throw new Error(tm("Dışa aktarma bulunamadı"));
+    }
+    exporting.set(exportId, wc);
+    if (!watched.has(wc)) {
+      watched.add(wc);
+      wc.once('destroyed', () => cancelExportsOf(wc));
+      wc.on('render-process-gone', () => cancelExportsOf(wc));
+    }
+    wc.setBackgroundThrottling(false);
+    sleepBlocker ??= powerSaveBlocker.start('prevent-app-suspension');
+  };
+  handleNoArgs('export:encoderInfo', async (): Promise<EncoderInfo> => {
+    const forced = SMOKE ? process.env.ZEYVOLA_TEST_EXPORT_ROUTE : undefined;
+    const route = forced === 'mf' || forced === 'webm' ? forced : undefined;
+    if (process.platform !== 'win32') return { mf: { available: false, reason: 'platform' }, ...(route ? { route } : {}) };
+    return { mf: await mfExports.probe(), ...(route ? { route } : {}) };
+  });
+  handle('export:mfBegin', async ({ token, width, height, fps, bitrate, audio }, e) => {
+    const target = exportTargets.take(token);
+    if (!target) throw new Error(tm("Kayıt yeri artık geçerli değil. Yeri yeniden seçin."));
+    if (!target.path.toLowerCase().endsWith('.mp4')) throw new Error(tm("Kayıt yeri artık geçerli değil. Yeri yeniden seçin."));
+    const r = await mfExports.begin(target.path, { overwrite: target.overwrite }, { width, height, fps, bitrate, audio });
+    await watchExport(r.exportId, e.sender);
+    return r;
+  });
+  handle('export:mfWrite', ({ exportId, kind, time, duration, data }) => mfExports.write(exportId, kind, time, duration, data));
   handle('export:begin', async ({ token }, e) => {
     const target = exportTargets.take(token);
     if (!target) throw new Error(tm("Kayıt yeri artık geçerli değil. Yeri yeniden seçin."));
@@ -293,7 +335,7 @@ function registerIpc(): void {
   handle('export:write', ({ exportId, position, data }) => exportsWriter.write(exportId, position, data));
   handle('export:end', async ({ exportId, cancel }) => {
     try {
-      return await exportsWriter.end(exportId, cancel);
+      return await endExport(exportId, cancel);
     } finally {
       releaseExport(exportId);
     }
@@ -598,10 +640,10 @@ app.on('activate', () => {
 let exportsCancelled = false;
 app.on('will-quit', (e) => {
   globalShortcut.unregisterAll();
-  if (exportsCancelled || exportsWriter.pending === 0) return;
+  if (exportsCancelled || exportsWriter.pending + mfExports.pending === 0) return;
   e.preventDefault();
   exportsCancelled = true;
-  void exportsWriter.cancelAll().finally(() => app.quit());
+  void Promise.allSettled([exportsWriter.cancelAll(), mfExports.cancelAll()]).finally(() => app.quit());
 });
 
 export { hudWindow };

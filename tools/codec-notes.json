@@ -59,8 +59,8 @@
       ],
       "chromiumTitle": null,
       "where": {
-        "tr": "Yalnızca işletim sisteminin donanım kodlayıcısı: macOS VideoToolbox (ölçüldü), Windows Media Foundation (Windows'ta test edilmedi). Electron'un yazılım H.264 kodlayıcısı (OpenH264) hiç istenmez. Kodlayıcı yoksa dışa aktarma başlamadan söylenir ve WebM önerilir; MP4'e başka codec yazılmaz. A dağıtımında macOS kayıt yardımcısı da ekranı ve kamerayı VideoToolbox ile H.264 yazar.",
-        "en": "Only the operating system's hardware encoder: macOS VideoToolbox (measured), Windows Media Foundation (not tested on Windows). Electron's software H.264 encoder (OpenH264) is never asked for. Without a hardware encoder the app says so before the export starts and suggests WebM; no other codec is written into MP4. In the A distribution the macOS recorder also writes screen and camera as H.264 through VideoToolbox."
+        "tr": "İşletim sisteminin kodlayıcısı: önce ekran kartının (donanım) kodlayıcısı WebCodecs üzerinden: macOS VideoToolbox (ölçüldü), Windows Media Foundation (Windows'ta test edilmedi). Windows'ta donanım kodlayıcısı yoksa Windows'un kendi yazılım kodlayıcısı (\"H264 Encoder MFT\", mfh264enc.dll) Windows yardımcısının Sink Writer'ı üzerinden kullanılır (GitHub Windows koşucusunda envanterde görüldü; uygulama içinden henüz ölçülmedi). Electron'un yazılım H.264 kodlayıcısı (OpenH264) hiç istenmez. Hiçbiri yoksa video WebM olarak kaydedilir ve bu açıkça söylenir; MP4'e başka codec yazılmaz. A dağıtımında macOS kayıt yardımcısı da ekranı ve kamerayı VideoToolbox ile H.264 yazar.",
+        "en": "The operating system's encoder: first the graphics card's (hardware) encoder through WebCodecs: macOS VideoToolbox (measured), Windows Media Foundation (not tested on Windows). On Windows without a hardware encoder, Windows' own software encoder (\"H264 Encoder MFT\", mfh264enc.dll) is used through the Windows helper's Sink Writer (seen in the inventory on GitHub's Windows runner; not yet measured from the app). Electron's software H.264 encoder (OpenH264) is never asked for. With neither, the video is saved as WebM and the app says so; no other codec is written into MP4. In the A distribution the macOS recorder also writes screen and camera as H.264 through VideoToolbox."
       },
       "license": {
         "tr": "Kodlayıcı Zeyvola'nın değil; işletim sistemine ait",
@@ -106,8 +106,8 @@
       ],
       "chromiumTitle": null,
       "where": {
-        "tr": "İşletim sisteminin kodlayıcısı (MP4 dışa aktarmanın sesi): libffmpeg'de kodlayıcı yok (ölçüldü); macOS'ta AudioToolbox, Windows'ta Media Foundation (Windows'ta test edilmedi). Kodlayıcı yoksa MP4 yerine WebM önerilir; MP4'e Opus yazılmaz. Kayıtlar AAC değil Opus ile yazılır.",
-        "en": "The operating system's encoder (the sound of MP4 exports): libffmpeg has no encoders (measured); AudioToolbox on macOS, Media Foundation on Windows (not tested on Windows). Without one, WebM is suggested instead of MP4; Opus is never written into MP4. Recordings are written with Opus, not AAC."
+        "tr": "İşletim sisteminin kodlayıcısı (MP4 dışa aktarmanın sesi): libffmpeg'de kodlayıcı yok (ölçüldü); macOS'ta AudioToolbox, Windows'ta Media Foundation (WebCodecs ya da, H.264 yazılım yolunda, Windows yardımcısının Sink Writer'ı içinde \"Microsoft AAC Audio Encoder MFT\", mfaacenc.dll; Windows'ta uygulama içinden test edilmedi). Kodlayıcı yoksa video WebM olarak kaydedilir; MP4'e Opus yazılmaz. Kayıtlar AAC değil Opus ile yazılır.",
+        "en": "The operating system's encoder (the sound of MP4 exports): libffmpeg has no encoders (measured); AudioToolbox on macOS, Media Foundation on Windows (WebCodecs or, on the software H.264 path, \"Microsoft AAC Audio Encoder MFT\", mfaacenc.dll, inside the Windows helper's Sink Writer; not tested from the app on Windows). Without one, the video is saved as WebM; Opus is never written into MP4. Recordings are written with Opus, not AAC."
       },
       "license": {
         "tr": "Kodlayıcı Zeyvola'nın değil",
