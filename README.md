@@ -4,7 +4,8 @@ macOS için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera, mikrofo
 
 *Screen recording and video editing for macOS. Screen, camera, microphone and system audio are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
 
-> Sürüm 0.1, ilk genel sürüm. Şimdilik yalnızca **macOS (Apple Silicon)**. Windows sürümü hazırlanıyor; gerçek Windows'ta test edilene kadar yayımlanmayacak.
+> Sürüm 0.1, ilk genel sürüm. Şimdilik **macOS** (Apple Silicon ve Intel). Windows sürümü **test ediliyor, henüz yayımlanmadı**; gerçek Windows'ta doğrulanana kadar yayımlanmayacak.
+> *Version 0.1, the first public release. For now **macOS** only (Apple silicon and Intel). The Windows version is **being tested and not released yet**; it will not be published until it is verified on real Windows.*
 >
 > Kayıt, macOS kayıt yardımcısıyla (ScreenCaptureKit) yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür.
 > *Recording uses the macOS recording helper (ScreenCaptureKit): system audio goes to its own track and the cursor is kept out of the video. With the "Fallback" (browser) method on the recording screen, system audio is not recorded and the cursor is part of the video.*
@@ -42,20 +43,102 @@ Kayıtlar, imleç verileri ve projeler yalnızca bilgisayarınızda kalır. Uygu
 *Recordings, cursor data and projects stay on your computer. The app makes no network requests and sends no telemetry.*
 
 ## İndirme / Download
-Sürümler GitHub **Releases** sayfasında yayımlanır. Her sürümde şunlar bulunur:
-- uygulama (`Zeyvola-<sürüm>-macos-arm64.zip`);
-- FFmpeg kaynak kodu paketi (LGPL-2.1, bkz. *Üçüncü taraf yazılımlar*);
-- `SHA256SUMS.txt`.
+Sürümler GitHub **Releases** sayfasında yayımlanır. Bilgisayarınıza uyan dosyayı indirin:
 
-Uygulama Apple Developer ID ile imzalanıp noterlenmediyse, macOS ilk açılışta uygulamanın açılmasını engeller. Bu durumda:
-- macOS 15 ve sonrası: uygulamayı bir kez açmayı deneyin, ardından **Sistem Ayarları › Gizlilik ve Güvenlik** bölümünde **Yine de Aç**'a tıklayın.
-- macOS 14 ve öncesi: uygulamaya sağ tıklayıp **Aç**'ı seçin.
+*Releases are published on the GitHub **Releases** page. Download the file for your computer:*
 
-*If the app is not signed with an Apple Developer ID and notarized, macOS blocks the first launch. On macOS 15 and later, try to open it once, then click **Open Anyway** in **System Settings › Privacy & Security**. On macOS 14 and earlier, right-click the app and choose **Open**.*
+| Bilgisayar / Computer | Dosya / File | Durum / Status |
+|---|---|---|
+| Apple Silicon Mac (M1, M2, M3, M4 …) | `Zeyvola-<sürüm>-macos-arm64.dmg` (ya da `.zip`) | Yayımlanır / Released |
+| Intel işlemcili Mac / Intel Mac | `Zeyvola-<sürüm>-macos-x64.dmg` (ya da `.zip`) | Yayımlanır / Released (aşağıdaki nota bakın / see the note below) |
+| Windows 10 / 11 (64 bit, x64) | `Zeyvola-<sürüm>-windows-x64.zip` | **Test ediliyor, henüz yayımlanmadı** / **Being tested, not released yet** |
 
-**Ekran kaydı izni.** İlk kayıtta macOS izin ister: **Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Ses Kaydı** bölümünde Zeyvola'yı açın, sonra Zeyvola'yı kapatıp yeniden açın. Developer ID ile imzalanmamış bir sürümde bu izin her güncellemeden sonra yeniden verilmelidir; macOS eski izni tutarsa Zeyvola satırını "−" ile kaldırıp uygulamayı yeniden açın, gerekirse bilgisayarı yeniden başlatın.
+Her sürümde ayrıca FFmpeg kaynak kodu paketi (`zeyvola-ffmpeg-lgpl-source-electron-<sürüm>.tar.gz`, LGPL-2.1, bkz. *Üçüncü taraf yazılımlar*) ve `SHA256SUMS.txt` bulunur. Uygulamayı kullanmak için bunlara gerek yoktur.
 
-*Screen recording permission: on the first recording macOS asks for it — turn on Zeyvola in **System Settings › Privacy & Security › Screen & System Audio Recording**, then quit and reopen Zeyvola. Without a Developer ID signature the permission has to be given again after each update; if macOS keeps the old one, remove the Zeyvola row with "−", reopen the app, and restart the Mac if needed.*
+*Each release also has the FFmpeg source package (LGPL-2.1, see* Third-party software*) and `SHA256SUMS.txt`; you do not need them to use the app.*
+
+**Mac'im hangisi? / Which Mac do I have?** Apple menüsü › **Bu Mac Hakkında**. "Çip: Apple M…" yazıyorsa Apple Silicon, "İşlemci: … Intel …" yazıyorsa Intel dosyasını indirin.
+
+*Apple menu › **About This Mac**: "Chip" followed by an Apple chip means Apple silicon; "Processor" followed by an Intel processor means an Intel Mac.*
+
+**Intel Mac notu / Intel Mac note.** Intel paketi bir Apple Silicon Mac'te Rosetta 2 altında uygulamanın kendi testlerinin tamamından geçti; gerçek bir Intel Mac'te henüz denenmedi. Bir sorun görürseniz lütfen **Issues** üzerinden bildirin.
+
+*The Intel package passed all of the app's own tests under Rosetta 2 on an Apple silicon Mac but has not been tried on real Intel hardware yet. If something goes wrong, please report it under **Issues**.*
+
+**`.dmg` mi `.zip` mi? / `.dmg` or `.zip`?** İkisi de aynı uygulamayı içerir. `.dmg` bir disk görüntüsüdür; açınca uygulamayı **Uygulamalar** klasörüne sürüklersiniz. `.zip` aynı uygulamayı lisans dosyalarıyla birlikte bir klasör olarak verir. Emin değilseniz `.dmg`'yi seçin.
+
+*Both contain the same app. The `.dmg` is a disk image you open and drag the app from into **Applications**; the `.zip` gives the same app in a folder together with the license files. If unsure, pick the `.dmg`.*
+
+**İsteğe bağlı: dosyayı doğrulama / Optional: verify the download.** İndirilen dosyanın SHA-256 değerini `SHA256SUMS.txt` içindeki satırla karşılaştırın; aynı değilse dosyayı kullanmayın ve yeniden indirin.
+
+*Compare the file's SHA-256 with its line in `SHA256SUMS.txt`; if they differ, do not use the file and download it again.*
+
+```bash
+shasum -a 256 ~/Downloads/Zeyvola-<sürüm>-macos-arm64.dmg      # macOS (Terminal)
+```
+
+```powershell
+Get-FileHash .\Zeyvola-<sürüm>-windows-x64.zip                  # Windows (PowerShell; varsayılan SHA256)
+```
+
+### macOS'ta kurulum / Installing on macOS
+1. `.dmg` dosyasını açın ve **Zeyvola**'yı yanındaki **Applications** (Uygulamalar) kısayoluna sürükleyin. (`.zip` indirdiyseniz: zip'i açın, içindeki `Zeyvola.app`'i **Uygulamalar** klasörüne taşıyın.)
+2. Zeyvola'yı **Uygulamalar** klasöründen açın.
+3. Zeyvola Apple Developer ID ile imzalanmadığı ve noterlenmediği için macOS ilk açılışı engeller:
+   - **macOS 15 ve sonrası:** Uygulamayı bir kez açmayı deneyin ve uyarıyı kapatın. Ardından **Sistem Ayarları › Gizlilik ve Güvenlik** bölümüne gidin (aşağı kaydırmanız gerekebilir); **Güvenlik** kısmında Zeyvola için **Yine de Aç**'a tıklayın ve Mac'inizin giriş parolasını girin. Apple'a göre bu düğme, uygulamayı açmayı denedikten sonra yaklaşık bir saat görünür; görünmüyorsa uygulamayı yeniden açmayı deneyin.
+   - **macOS 14 ve öncesi:** Uygulamaya sağ tıklayıp (ya da Control tuşuyla tıklayıp) **Aç**'ı seçin, sonra açılan pencerede yeniden **Aç**'a tıklayın.
+
+   Bu adım ilk açılışta gerekir; yeni bir sürümü indirdiğinizde yeniden gerekebilir.
+4. Zeyvola macOS 13 (Ventura) ya da sonrasını gerektirir.
+
+*Open the `.dmg` and drag **Zeyvola** onto the **Applications** shortcut next to it (from the `.zip`: move `Zeyvola.app` into **Applications**), then open it from **Applications**. Zeyvola is not signed with an Apple Developer ID or notarized, so macOS blocks the first launch. On macOS 15 and later, try to open it once, close the warning, then go to **System Settings › Privacy & Security** (you may need to scroll), click **Open Anyway** for Zeyvola in the **Security** section and enter your login password; Apple says the button is shown for about an hour after the attempt. On macOS 14 and earlier, right-click (or Control-click) the app, choose **Open**, then **Open** again. This is needed on the first launch and may be needed again after downloading a new version. Zeyvola needs macOS 13 (Ventura) or later.*
+
+### Windows'ta kurulum / Installing on Windows
+> Windows sürümü **test ediliyor, henüz yayımlanmadı**. Aşağıdaki adımlar yayımlandığında geçerli olacaktır.
+> *The Windows version is **being tested and not released yet**. These steps apply once it is released.*
+
+1. `.zip` dosyasını kalıcı bir klasöre çıkarın (Dosya Gezgini'nde zip'e sağ tıklayıp *Extract All* / tümünü çıkar). Uygulamayı zip'in içinden çalıştırmayın: çalışmak için yanındaki dosyalara ihtiyaç duyar.
+2. Çıkan klasörde `Zeyvola\Zeyvola.exe` dosyasını açın. İsterseniz masaüstüne ya da Başlat menüsüne kısayol oluşturabilirsiniz.
+3. Zeyvola kod imzası olmadan dağıtıldığı için Microsoft Defender SmartScreen **"Windows kişisel bilgisayarınızı korudu"** uyarısını gösterebilir. **Ek bilgi**'ye, sonra **Yine de çalıştır**'a tıklayın. Kurumsal bilgisayarlarda yönetici politikası bu adımı kapatmış olabilir.
+4. **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de bu özellik açıksa (**Windows Güvenliği › Uygulama ve tarayıcı denetimi**), Microsoft'a göre imzasız uygulamaları engeller ve tek bir uygulama için istisna tanımlanamaz. Bu durumda Zeyvola hiç açılmayabilir. Özelliği kapatıp kapatmamak sizin kararınızdır; kapatmak bütün bilgisayarın korumasını etkiler.
+5. **İlk açılışta Microsoft bileşeni koşulları:** Zeyvola'nın Windows sürümü, görüntü işleme için Microsoft'a ait `d3dcompiler_47.dll` dosyasını içerir. Microsoft bu dosyanın ancak kullanıcı koşullarını kabul ederse dağıtılmasına izin verir; bu yüzden ilk açılışta, herhangi bir pencere açılmadan önce koşullar sorulur. Koşullar yalnızca bu dosya için geçerlidir ve Zeyvola'nın kendi lisansını değiştirmez. **Koşulları oku** tam metni açar (zip'te de `MICROSOFT-D3DCOMPILER-TERMS.txt` olarak bulunur). **Kabul ediyorum** derseniz Zeyvola bunu hatırlar ve bir kez kendiliğinden yeniden başlar. **Kabul etmiyorum** derseniz Zeyvola kapanır; bir sonraki açılışta koşullar yeniden sorulur.
+
+*Extract the `.zip` to a permanent folder (right-click › Extract All in File Explorer); do not run the app from inside the zip, it needs the files next to it. Open `Zeyvola\Zeyvola.exe`. Zeyvola is distributed without a code signature, so Microsoft Defender SmartScreen may show "Windows protected your PC": click **More info**, then **Run anyway** (company policy may block this). On Windows 11, if Smart App Control is on (Windows Security › App & browser control), Microsoft says it blocks unsigned apps and cannot make an exception for a single app, so Zeyvola may not start at all; turning it off is your decision and affects the whole computer. On first launch, before any window opens, Zeyvola asks you to accept Microsoft's terms for `d3dcompiler_47.dll` (a Microsoft file used for graphics, shipped with the Windows version). They cover only that file and do not change Zeyvola's own license. **Read terms** opens the full text (also `MICROSOFT-D3DCOMPILER-TERMS.txt` in the zip). After **Accept**, Zeyvola remembers it and restarts once; after **Decline**, it quits and asks again next time.*
+
+### İzinler / Permissions
+**macOS.** Zeyvola her izni ilk gerektiğinde ister; vermediğiniz izinleri sonradan **Sistem Ayarları › Gizlilik ve Güvenlik** altında açabilirsiniz:
+- **Ekran ve Sistem Ses Kaydı** (eski macOS sürümlerinde adı **Ekran Kaydı**): ekranı ve sistem sesini kaydetmek için. macOS bu izni programla isteme yolu sunmaz; ilk kayıtta sorar. İzni açtıktan sonra Zeyvola'yı kapatıp yeniden açın.
+- **Kamera** ve **Mikrofon**: kayıtta kamerayı ya da mikrofonu kullandığınızda macOS sorar. İzinlerin durumu Zeyvola'nın **Ayarlar** ekranında da görünür ve oradan istenebilir.
+- Tıklama yardımcısı (`zeyvola-input`) yalnızca fare tuşlarını ve kaydırmayı izler; macOS'ta ek bir izin gerektirmez. Klavyeyi okumaz.
+
+Zeyvola Developer ID ile imzalanmadığı için macOS, güncellemeden sonra uygulamayı yeni bir uygulama gibi görebilir ve ekran kaydı iznini yeniden isteyebilir. macOS eski izni tutup kaydı yine de engellerse: **Ekran ve Sistem Ses Kaydı** listesinde Zeyvola satırını seçip "−" ile kaldırın, Zeyvola'yı yeniden açıp izni yeniden verin; gerekirse bilgisayarı yeniden başlatın.
+
+*Zeyvola asks for each permission when first needed; you can turn them on later in **System Settings › Privacy & Security**: **Screen & System Audio Recording** (**Screen Recording** on older macOS versions) for the screen and system audio — macOS asks on the first recording, and you need to quit and reopen Zeyvola after allowing it; **Camera** and **Microphone** when you use them in a recording (their status is also shown, and can be requested, in Zeyvola's **Settings**). The click helper watches only mouse buttons and scrolling, needs no extra permission and does not read the keyboard. Without a Developer ID signature macOS may treat an updated app as new and ask for screen recording again; if it keeps the old entry and still blocks recording, remove the Zeyvola row with "−", reopen Zeyvola, allow it again, and restart the Mac if needed.*
+
+**Windows.** Ekran kaydı ve tıklamalar için ayrı bir izin gerekmez. Kamera ya da mikrofon çalışmıyorsa **Ayarlar › Gizlilik ve güvenlik › Kamera** (ya da **Mikrofon**) bölümünde masaüstü uygulamalarının erişimine izin verin. Bu ayar tek tek uygulamalar için değil, bütün masaüstü uygulamaları için geçerlidir.
+
+*No separate permission is needed for screen recording and clicks. If the camera or microphone does not work, allow desktop apps to access them under **Settings › Privacy & security › Camera** (or **Microphone**); this setting applies to all desktop apps, not to one.*
+
+### Kaldırma / Uninstalling
+Uygulamayı silmek projelerinizi ve kayıtlarınızı **silmez**. Bunları isterseniz kendiniz silin.
+
+*Removing the app does **not** delete your projects and recordings; delete them yourself if you want.*
+
+| | macOS | Windows |
+|---|---|---|
+| Uygulama / App | **Uygulamalar** klasöründeki `Zeyvola`'yı Çöp Sepeti'ne taşıyın / move it to the Trash | Zip'ten çıkardığınız klasörü silin (kurulum programı yoktur) / delete the extracted folder (there is no installer) |
+| Projeler ve kayıtlar / Projects and recordings | `~/Movies/Zeyvola Projeleri` (Finder'da **Filmler**) | **Videolar** klasörünüzdeki `Zeyvola Projeleri` (genellikle `%USERPROFILE%\Videos\Zeyvola Projeleri`) / in your **Videos** folder |
+| Ayarlar / Settings | `~/Library/Application Support/Zeyvola` | `%APPDATA%\Zeyvola` |
+
+Dışa aktardığınız videolar, kaydederken seçtiğiniz klasördedir ve kaldırmadan etkilenmez. macOS'ta izin satırlarını da kaldırmak isterseniz **Sistem Ayarları › Gizlilik ve Güvenlik** altındaki listelerde (ör. **Ekran ve Sistem Ses Kaydı**) Zeyvola'yı seçip "−" ile kaldırın.
+
+*Exported videos stay in the folder you chose when saving. On macOS, to remove the permission entries too, select Zeyvola in the lists under **System Settings › Privacy & Security** (e.g. **Screen & System Audio Recording**) and click "−".*
+
+### Sorun giderme / Troubleshooting
+- **macOS "Yine de Aç" düğmesini göstermiyor:** Düğme, uygulamayı açmayı denedikten sonra yaklaşık bir saat görünür. Zeyvola'yı yeniden açmayı deneyin, sonra **Gizlilik ve Güvenlik**'e dönün. *The **Open Anyway** button appears for about an hour after you try to open the app; try again, then go back to **Privacy & Security**.*
+- **Ekran kaydı başlamıyor (macOS):** Ekran kaydı izni verilmemiş ya da güncellemeden sonra eski izin geçersiz kalmış olabilir; yukarıdaki *İzinler* bölümüne bakın. *Screen recording does not start (macOS): the permission is missing or went stale after an update; see* Permissions *above.*
+- **MP4 dışa aktarma:** MP4 (H.264 + AAC) işletim sisteminin kodlayıcısıyla yazılır. Windows'ta ekran kartının H.264 kodlayıcısı yoksa Windows'un kendi yazılım kodlayıcısı kullanılır; bu daha yavaştır. O da yoksa video WebM olarak kaydedilir ve Zeyvola bunu dışa aktarmadan önce ve sonra söyler ("MP4 yerine WebM olarak kaydedildi"). WebM her zaman seçilebilir. *MP4 is written with the operating system's encoder. On Windows without a hardware H.264 encoder, Windows' software encoder is used (slower); without that, the video is saved as WebM and Zeyvola tells you before and after the export ("Saved as WebM instead of MP4"). WebM is always available.*
+- **Windows'ta uygulama hiç açılmıyor:** Akıllı Uygulama Denetimi açık olabilir (yukarıdaki 4. adım) ya da uygulama zip'in içinden çalıştırılmış olabilir (1. adım). *Smart App Control may be on (step 4), or the app was started from inside the zip (step 1).*
 
 ## Geliştirici / Developer
 Zeyvola'yı **Yıldız Dikme** (Independent Software Developer) geliştirir. GitHub: [YildizDikme](https://github.com/YildizDikme).
