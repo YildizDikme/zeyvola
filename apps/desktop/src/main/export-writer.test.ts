@@ -1,6 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExportBegin, ExportTargetRequest, Schemas } from '@zeyvola/protocol';
 
@@ -103,12 +104,23 @@ describe('ExportWriter', () => {
   it('a folder it may not write into gives a clear error, not a stack trace', async () => {
     const locked = join(dir, 'locked');
     await mkdir(locked);
-    await chmod(locked, 0o555);
-    expect(await writableFolder(locked)).toBe(false);
-    expect(await writableFolder(dir)).toBe(true);
-    expect(await writableFolder(join(dir, 'missing'))).toBe(false);
-    await expect(new ExportWriter().begin(join(locked, 'Demo.mp4'))).rejects.toThrow('Bu klasöre yazma izni yok');
-    await chmod(locked, 0o755);
+    // Windows ignores the mode bits of a folder; the same situation there is a deny entry in its
+    // access list (icacls, part of Windows), here for everyone (S-1-1-0), administrators included.
+    const win = process.platform === 'win32';
+    const icacls = (...args: string[]) => execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe'), [locked, ...args], { stdio: 'ignore' });
+    if (win) icacls('/deny', '*S-1-1-0:(OI)(CI)(W)');
+    else await chmod(locked, 0o555);
+    try {
+      // Node's access() on Windows only sees the read-only attribute, not access lists, so the
+      // early check cannot see this folder as locked there; the export itself still fails cleanly.
+      if (!win) expect(await writableFolder(locked)).toBe(false);
+      expect(await writableFolder(dir)).toBe(true);
+      expect(await writableFolder(join(dir, 'missing'))).toBe(false);
+      await expect(new ExportWriter().begin(join(locked, 'Demo.mp4'))).rejects.toThrow('Bu klasöre yazma izni yok');
+    } finally {
+      if (win) icacls('/remove:d', '*S-1-1-0');
+      else await chmod(locked, 0o755);
+    }
   });
 });
 
@@ -139,9 +151,12 @@ describe('export targets', () => {
     await writeFile(join(dir, 'Demo (2).mp4'), '');
     expect(await uniquePath(dir, 'Demo', 'mp4')).toBe(join(dir, 'Demo (3).mp4'));
     expect(await uniquePath(dir, 'Demo', 'webm')).toBe(join(dir, 'Demo.webm'));
-    expect(displayFolder('/Users/a/Movies', '/Users/a')).toBe('~/Movies');
-    expect(displayFolder('/Users/a', '/Users/a')).toBe('~');
-    expect(displayFolder('/Volumes/Disk', '/Users/a')).toBe('/Volumes/Disk');
+    // Paths in this system's own form (displayFolder works with the platform separator).
+    const home = join(sep, 'Users', 'a');
+    expect(displayFolder(join(home, 'Movies'), home)).toBe(`~${sep}Movies`);
+    expect(displayFolder(home, home)).toBe('~');
+    expect(displayFolder(join(sep, 'Volumes', 'Disk'), home)).toBe(join(sep, 'Volumes', 'Disk'));
+    expect(displayFolder(join(sep, 'Users', 'ab'), home)).toBe(join(sep, 'Users', 'ab'));
     expect(writeErrorMessage(Object.assign(new Error('x'), { code: 'ENOENT' }), '/Volumes/Gone')).toContain('Klasör bulunamadı: /Volumes/Gone');
   });
 });

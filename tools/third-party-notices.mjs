@@ -157,7 +157,13 @@ const PROFILE_NAME = { mp4: 'A (yayımlanan: MP4 + WebM, macOS kayıt yardımcı
 
 const STATUS_TR = { 'legal-review': 'Hukuki inceleme gerekli', 'low-risk-unverified': 'Düşük risk — hukuken doğrulanmadı' };
 
-export function renderMarkdown(data) {
+/**
+ * The notices as Markdown. The repository's copy (docs/THIRD_PARTY_NOTICES.md) is the same on every
+ * system; Electron's LICENSES.chromium.html differs per platform (entries, bytes), so its entry
+ * count and SHA-256 are written only into a package's own copy (`packaged`, writeDist), from the
+ * file that package ships.
+ */
+export function renderMarkdown(data, { packaged = false } = {}) {
   const { packages, electron, codecs } = data;
   const L = [];
   L.push('# Üçüncü Taraf Yazılımlar / Third-Party Software');
@@ -200,11 +206,19 @@ export function renderMarkdown(data) {
   L.push(electron.text);
   L.push('```');
   L.push('');
-  L.push(`Electron; Chromium, Node.js, FFmpeg ve diğer bileşenleri içerir. Bunların ${electron.chromium.entries} giriş içeren lisans bildirimleri`);
-  L.push('uygulama paketinde `licenses/LICENSES.chromium.html` dosyasında yer alır ve uygulamanın Ayarlar → Lisanslar bölümünden açılabilir.');
-  L.push(`Electron bundles Chromium, Node.js, FFmpeg and other components; their notices (${electron.chromium.entries} entries) ship as \`licenses/LICENSES.chromium.html\`.`);
-  L.push('');
-  L.push(`SHA-256 (LICENSES.chromium.html): \`${electron.chromium.sha256}\``);
+  if (packaged) {
+    L.push(`Electron; Chromium, Node.js, FFmpeg ve diğer bileşenleri içerir. Bunların ${electron.chromium.entries} giriş içeren lisans bildirimleri`);
+    L.push('uygulama paketinde `licenses/LICENSES.chromium.html` dosyasında yer alır ve uygulamanın Ayarlar → Lisanslar bölümünden açılabilir.');
+    L.push(`Electron bundles Chromium, Node.js, FFmpeg and other components; their notices (${electron.chromium.entries} entries) ship as \`licenses/LICENSES.chromium.html\`.`);
+    L.push('');
+    L.push(`SHA-256 (LICENSES.chromium.html): \`${electron.chromium.sha256}\``);
+  } else {
+    L.push('Electron; Chromium, Node.js, FFmpeg ve diğer bileşenleri içerir. Bunların lisans bildirimleri her uygulama paketinde, o platformun');
+    L.push('Electron sürümüyle gelen `licenses/LICENSES.chromium.html` dosyasında yer alır ve uygulamanın Ayarlar → Lisanslar bölümünden açılabilir.');
+    L.push('Dosyanın giriş sayısı ve SHA-256 özeti platforma göre değişir; paketin içindeki THIRD_PARTY_NOTICES.md bunları yazar.');
+    L.push('Electron bundles Chromium, Node.js, FFmpeg and other components; their notices ship in every package as `licenses/LICENSES.chromium.html`,');
+    L.push('the file of that platform\'s Electron build. Its entry count and SHA-256 differ per platform; the package\'s own THIRD_PARTY_NOTICES.md states them.');
+  }
   L.push('');
   L.push('## 2b. Electron ile gelen, Chromium bildiriminde bulunmayan bileşenler / Components shipped with Electron but missing from its Chromium notices');
   L.push('');
@@ -289,7 +303,6 @@ export function shippedProblems(data) {
 function installedPackages(root) {
   const store = join(root, 'node_modules', '.pnpm');
   const all = new Set();
-  const portable = new Set();
   for (const entry of existsSync(store) ? readdirSync(store) : []) {
     const nm = join(store, entry, 'node_modules');
     if (!existsSync(nm)) continue;
@@ -301,27 +314,33 @@ function installedPackages(root) {
         try { pj = readJson(pjPath); } catch { continue; }
         if (!pj.name || !pj.version) continue;
         all.add(`${pj.name}@${pj.version}`);
-        if (!pj.os && !pj.cpu) portable.add(`${pj.name}@${pj.version}`);
       }
     }
   }
-  return { all, portable };
+  return { all };
+}
+
+/** Does an inventory "Platform" value (os[/cpu], comma lists) describe this system? */
+function onThisSystem(platform) {
+  const [os, cpu] = platform.split('/');
+  const fits = (list, v) => !list || list.split(',').some((x) => x === v || (x.startsWith('!') && x.slice(1) !== v));
+  return fits(os, process.platform) && fits(cpu, process.arch);
 }
 
 /** New or removed dependencies that docs/licenses/inventory.md does not reflect yet. */
 export function inventoryGaps(root = ROOT) {
   const md = readFileSync(join(root, 'docs', 'licenses', 'inventory.md'), 'utf8');
-  const listed = new Set();
-  for (const line of md.split('\n')) {
-    const m = /^\| ([^|]+?) \| ([^|]+?) \| [^|]*\| (?:var|yok) \|/.exec(line);
-    if (m) listed.add(`${m[1].trim()}@${m[2].trim()}`);
+  const listed = new Map(); // name@version → platform ('—' when the package is the same everywhere)
+  for (const line of md.split(/\r?\n/)) {
+    const m = /^\| ([^|]+?) \| ([^|]+?) \| [^|]*\| (?:var|yok) \|[^|]*\|[^|]*\|(?: ([^|]+?) \|)?/.exec(line);
+    if (m) listed.set(`${m[1].trim()}@${m[2].trim()}`, m[3]?.trim() ?? '—');
   }
-  const { all, portable } = installedPackages(root);
+  const { all } = installedPackages(root);
   return {
-    // Platform-specific binaries (esbuild/rollup per OS, fsevents) differ between machines,
-    // so only portable packages must be listed; stale rows are judged against everything installed.
-    missingFromInventory: [...portable].filter((k) => !listed.has(k)).sort(),
-    notInstalled: [...listed].filter((k) => !all.has(k) && !/(darwin|win32|linux|freebsd|android)/.test(k)).sort(),
+    // Everything installed here must be listed, this system's platform binaries included.
+    missingFromInventory: [...all].filter((k) => !listed.has(k)).sort(),
+    // A listed package that should be installed here and is not: a stale row. Other systems' rows stay.
+    notInstalled: [...listed].filter(([k, p]) => !all.has(k) && (p === '—' || onThisSystem(p))).map(([k]) => k).sort(),
   };
 }
 
@@ -330,7 +349,7 @@ export function writeDist(distDir, root = ROOT, { electronDist = null, profile =
   const data = collect(root, { electronDist, profile, platform });
   const out = join(distDir, 'licenses');
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, 'THIRD_PARTY_NOTICES.md'), renderMarkdown(data));
+  writeFileSync(join(out, 'THIRD_PARTY_NOTICES.md'), renderMarkdown(data, { packaged: true }));
   writeFileSync(join(out, 'third-party.json'), renderJson(data));
   copyFileSync(data.electron.licensePath, join(out, 'electron-LICENSE.txt'));
   if (data.own) {

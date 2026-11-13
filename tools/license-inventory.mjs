@@ -1,6 +1,14 @@
 // Lists every installed npm package with its declared license and whether a LICENSE file
 // ships with it, classifies them against the project policy, and writes
 // docs/licenses/inventory.md. Exit code 1 if anything is blocked or unknown.
+//
+// Platform-specific binaries (packages with "os"/"cpu" in package.json: esbuild, rolldown,
+// TypeScript and lightningcss per system, fsevents) are only installed on their own system. Each
+// one is recorded, on the system where it is installed, from its own package.json and license
+// file into docs/licenses/platform-packages.json; the inventory lists those of every system.
+//   node tools/license-inventory.mjs                    writes inventory.md (and records this system's)
+//   node tools/license-inventory.mjs --print-platform   prints this system's records only (CI), writes nothing
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { shippedPackages } from './third-party-notices.mjs';
@@ -41,11 +49,37 @@ for (const entry of existsSync(store) ? readdirSync(store) : []) {
       const key = `${j.name}@${j.version}`;
       if (rows.has(key)) continue;
       const lic = typeof j.license === 'string' ? j.license : Array.isArray(j.licenses) ? j.licenses.map((l) => l.type).join(' OR ') : j.license?.type;
-      const hasFile = readdirSync(join(nm, d)).some((f) => /^(licen[cs]e|copying)/i.test(f));
-      rows.set(key, { name: j.name, version: j.version, license: lic ?? '', hasFile, cls: classify(lic), use: direct.get(j.name) ?? 'dolaylı' });
+      const licenseFile = readdirSync(join(nm, d)).find((f) => /^(licen[cs]e|copying)/i.test(f)) ?? null;
+      const platform = j.os || j.cpu ? [j.os, j.cpu].filter(Boolean).map((x) => [].concat(x).join(',')).join('/') : null;
+      const row = { name: j.name, version: j.version, license: lic ?? '', hasFile: !!licenseFile, cls: classify(lic), use: direct.get(j.name) ?? 'dolaylı', platform };
+      if (platform) {
+        const text = licenseFile ? readFileSync(join(nm, d, licenseFile), 'utf8') : '';
+        row.record = {
+          name: j.name, version: j.version, platform, license: row.license, licenseFile,
+          licenseSha256: licenseFile ? createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex') : null,
+          licenseFirstLine: text.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? null,
+          recordedOn: `${process.platform}-${process.arch}`,
+        };
+      }
+      rows.set(key, row);
     }
   }
 }
+
+// This system's platform packages, as read above; then those recorded on other systems.
+const PLATFORM_FILE = join(ROOT, 'docs', 'licenses', 'platform-packages.json');
+const here = Object.fromEntries([...rows.values()].filter((r) => r.record).map((r) => [`${r.name}@${r.version}`, r.record]));
+if (process.argv.includes('--print-platform')) {
+  console.log(JSON.stringify(here, null, 1));
+  process.exit(0);
+}
+const recorded = existsSync(PLATFORM_FILE) ? JSON.parse(readFileSync(PLATFORM_FILE, 'utf8')) : {};
+const platformRecords = Object.fromEntries(Object.entries({ ...recorded, ...here }).sort(([a], [b]) => a.localeCompare(b)));
+for (const [key, r] of Object.entries(platformRecords)) {
+  if (rows.has(key)) continue;
+  rows.set(key, { name: r.name, version: r.version, license: r.license, hasFile: !!r.licenseFile, cls: classify(r.license), use: 'dolaylı', platform: r.platform });
+}
+writeFileSync(PLATFORM_FILE, `${JSON.stringify(platformRecords, null, 1)}\n`);
 
 const list = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
 const count = (c) => list.filter((r) => r.cls === c).length;
@@ -66,9 +100,11 @@ const lines = [
   'Bu tablo paket meta verisine dayanır. Dağıtıma girecek bileşenlerin lisansı, yayın öncesi kullanılan sürümün LICENSE dosyasından ayrıca doğrulanır.',
   '',
   ...(conditional.length ? ['Koşullu lisanslı paketler ve dağıtım durumu (dağıtılan paketler: `tools/third-party-notices.mjs`):', '', ...conditional, ''] : []),
-  '| Paket | Sürüm | Lisans | LICENSE dosyası | Kullanım | Sınıf |',
-  '|---|---|---|---|---|---|',
-  ...list.map((r) => `| ${r.name} | ${r.version} | ${r.license || '—'} | ${r.hasFile ? 'var' : 'yok'} | ${r.use} | ${r.cls} |`),
+  'Platform sütunu dolu olanlar yalnızca o sistemde kurulan derleme araçlarıdır (esbuild, rolldown, TypeScript, lightningcss ikilileri; fsevents); uygulama paketine girmez. Her biri kendi sisteminde, kurulu paketin package.json ve lisans dosyasından kaydedildi: `docs/licenses/platform-packages.json` (lisans dosyasının adı, SHA-256 özeti, ilk satırı, kaydedildiği sistem).',
+  '',
+  '| Paket | Sürüm | Lisans | LICENSE dosyası | Kullanım | Sınıf | Platform |',
+  '|---|---|---|---|---|---|---|',
+  ...list.map((r) => `| ${r.name} | ${r.version} | ${r.license || '—'} | ${r.hasFile ? 'var' : 'yok'} | ${r.use} | ${r.cls} | ${r.platform ?? '—'} |`),
   '',
   '## Elle eklenen bileşenler',
   '',

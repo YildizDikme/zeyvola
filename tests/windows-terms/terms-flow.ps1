@@ -36,12 +36,22 @@ function StopApp([string]$exePath) {
   AppProcesses $exePath | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
   Start-Sleep -Milliseconds 800
 }
-function DllLoaded([string]$exePath) {
+# Which copy of d3dcompiler_47.dll is loaded, by which of the app's processes: the one shipped
+# next to the app (the terms are about that one) or Windows' own in System32.
+function DllUse([string]$exePath) {
+  $bundled = Join-Path (Split-Path $exePath) 'd3dcompiler_47.dll'
+  $use = @()
   foreach ($p in (AppProcesses $exePath)) {
-    try { if ($p.Modules | Where-Object { $_.ModuleName -ieq 'd3dcompiler_47.dll' }) { return $true } } catch { }
+    $type = try { $c = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine; if ($c -match '--type=([\w-]+)') { $Matches[1] } else { 'browser' } } catch { '?' }
+    try {
+      foreach ($m in ($p.Modules | Where-Object { $_.ModuleName -ieq 'd3dcompiler_47.dll' })) {
+        $use += [ordered]@{ process = $type; path = $m.FileName; bundled = ($m.FileName -ieq $bundled) }
+      }
+    } catch { }
   }
-  return $false
+  return , $use
 }
+function DllLoaded([string]$exePath) { @((DllUse $exePath) | Where-Object { $_.bundled }).Count -gt 0 }
 # Top-level windows of the app's processes: dialogs (#32770) and app windows.
 function AppWindows([string]$exePath) {
   $ids = @(AppProcesses $exePath | ForEach-Object { $_.Id })
@@ -56,12 +66,19 @@ function WaitFor([scriptblock]$cond, [int]$seconds) {
 }
 function Dialog([string]$exePath) { AppWindows $exePath | Where-Object { $_.Current.ClassName -eq '#32770' } | Select-Object -First 1 }
 function MainWindow([string]$exePath) { AppWindows $exePath | Where-Object { $_.Current.ClassName -ne '#32770' -and $_.Current.Name -match 'Zeyvola' } | Select-Object -First 1 }
+# The dialog's buttons in order. Electron's message box is a Windows task dialog: its buttons are
+# "CCPushButton" panes with AutomationIds CommandButton_100, _101, ... (seen on Windows Server 2025).
 function Buttons($dialog) {
-  $cond = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
-  @($dialog.FindAll($TreeScope::Descendants, $cond))
+  $all = @($dialog.FindAll($TreeScope::Descendants, [System.Windows.Automation.Condition]::TrueCondition))
+  $cmd = @($all | Where-Object { $_.Current.AutomationId -like 'CommandButton_*' } | Sort-Object { [int]($_.Current.AutomationId -replace '\D', '') })
+  if ($cmd.Count) { return , $cmd }
+  return , @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button })
 }
 function Press($button) {
-  $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  $p = $null
+  if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return 'UI Automation (Invoke)' }
+  if ($button.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$p)) { $p.DoDefaultAction(); return 'UI Automation (DoDefaultAction)' }
+  $button.SetFocus(); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait(' '); return 'odak + Bosluk'
 }
 # The dialog's buttons, waited for (the window can appear before its contents).
 function WaitButtons($dialog) {
@@ -85,7 +102,7 @@ function PressByKeys($dialog, [string]$which) {
 function Answer($r, $dialog, [string]$which) {
   $btn = WaitButtons $dialog
   $r.buttons = @($btn | ForEach-Object { $_.Current.Name })
-  if ($btn.Count -ge 3) { Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]; $r.answeredBy = 'UI Automation'; return }
+  if ($btn.Count -ge 3) { $r.answeredBy = Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]; return }
   $r.tree = DumpTree $dialog
   $r.notes += "dugme bulunamadi ($($btn.Count)); klavyeyle yanitlandi"
   PressByKeys $dialog $which
@@ -129,7 +146,10 @@ Scenario 'decline' {
   if (-not $d) { $r.notes += 'iletisim kutusu cikmadi'; Shot 'terms-decline-none'; return }
   $r.title = $d.Current.Name
   $r.windowsBeforeAnswer = @(AppWindows $Exe | ForEach-Object { "$($_.Current.ClassName)|$($_.Current.Name)" })
+  Start-Sleep -Seconds 2  # the GPU process (if any) has started by now
+  $r.dllUseBeforeAnswer = DllUse $Exe
   $r.dllLoadedBeforeAnswer = DllLoaded $Exe
+  $r.processesBeforeAnswer = @(AppProcesses $Exe | ForEach-Object { try { $c = (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine; if ($c -match '--type=([\w-]+)') { $Matches[1] } else { 'browser' } } catch { '?' } })
   Shot 'terms-dialog'
   Answer $r $d 'decline'
   $gone = WaitFor { if ((AppProcesses $Exe).Count -eq 0) { $true } } 20
@@ -147,6 +167,8 @@ Scenario 'accept' {
   $d = WaitFor { Dialog $Exe } 45
   if (-not $d) { $r.notes += 'iletisim kutusu cikmadi'; return }
   $first = $p.Id
+  Start-Sleep -Seconds 2
+  $r.dllUseBeforeAnswer = DllUse $Exe
   $r.dllLoadedBeforeAnswer = DllLoaded $Exe
   Answer $r $d 'accept'
   $r.stateRecorded = [bool](WaitFor { Test-Path (StateFile $th) } 15)
@@ -156,6 +178,7 @@ Scenario 'accept' {
   $r.relaunched = [bool]$main -and -not (Get-Process -Id $first -ErrorAction SilentlyContinue)
   $r.dialogAgain = [bool](Dialog $Exe)
   Start-Sleep -Seconds 3
+  $r.dllUseAfter = DllUse $Exe
   $r.dllLoadedAfter = DllLoaded $Exe
   Shot 'terms-after-accept'
   $r.ok = $r.stateRecorded -and $r.relaunched -and -not $r.dialogAgain -and $r.dllLoadedAfter -and -not $r.dllLoadedBeforeAnswer

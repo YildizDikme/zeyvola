@@ -41,6 +41,7 @@ for (const f of files.filter((x) => x.endsWith('terms-flow.json'))) {
   for (const s of [].concat(t.scenarios ?? [])) say(`${s.ok ? '✓' : '✗'} ${s.scenario}: ${JSON.stringify(s)}`);
   say();
 }
+for (const f of files.filter((x) => /platform-packages-.*\.json$/.test(x))) say(`## ${relative(out, f)} (docs/licenses/platform-packages.json için)\n${readFileSync(f, 'utf8')}\n`);
 for (const f of files.filter((x) => x.endsWith('uitest-clicks.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 
 const text = lines.join('\n');

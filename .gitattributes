@@ -1,0 +1,21 @@
+# Text files are stored and checked out with LF on every system: generated files (THIRD_PARTY_NOTICES,
+# license inventory) are compared byte for byte in the tests, and the PowerShell scripts are ASCII + LF.
+* text=auto eol=lf
+
+# Binary files are never converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.zip binary
+*.gz binary
+*.mp4 binary
+*.webm binary
+*.m4a binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.exe binary
+*.dll binary

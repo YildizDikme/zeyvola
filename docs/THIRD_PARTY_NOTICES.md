@@ -160,11 +160,11 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Electron; Chromium, Node.js, FFmpeg ve diğer bileşenleri içerir. Bunların 779 giriş içeren lisans bildirimleri
-uygulama paketinde `licenses/LICENSES.chromium.html` dosyasında yer alır ve uygulamanın Ayarlar → Lisanslar bölümünden açılabilir.
-Electron bundles Chromium, Node.js, FFmpeg and other components; their notices (779 entries) ship as `licenses/LICENSES.chromium.html`.
-
-SHA-256 (LICENSES.chromium.html): `3375e2a9bd7bc631738fde10be6548a76efe8cf5e4b8826b8140ba8b0c4d6353`
+Electron; Chromium, Node.js, FFmpeg ve diğer bileşenleri içerir. Bunların lisans bildirimleri her uygulama paketinde, o platformun
+Electron sürümüyle gelen `licenses/LICENSES.chromium.html` dosyasında yer alır ve uygulamanın Ayarlar → Lisanslar bölümünden açılabilir.
+Dosyanın giriş sayısı ve SHA-256 özeti platforma göre değişir; paketin içindeki THIRD_PARTY_NOTICES.md bunları yazar.
+Electron bundles Chromium, Node.js, FFmpeg and other components; their notices ship in every package as `licenses/LICENSES.chromium.html`,
+the file of that platform's Electron build. Its entry count and SHA-256 differ per platform; the package's own THIRD_PARTY_NOTICES.md states them.
 
 ## 2b. Electron ile gelen, Chromium bildiriminde bulunmayan bileşenler / Components shipped with Electron but missing from its Chromium notices
 

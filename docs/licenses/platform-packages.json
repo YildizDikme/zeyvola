@@ -1,0 +1,52 @@
+{
+ "@esbuild/darwin-arm64@0.28.2": {
+  "name": "@esbuild/darwin-arm64",
+  "version": "0.28.2",
+  "platform": "darwin/arm64",
+  "license": "MIT",
+  "licenseFile": null,
+  "licenseSha256": null,
+  "licenseFirstLine": null,
+  "recordedOn": "darwin-arm64"
+ },
+ "@rolldown/binding-darwin-arm64@1.2.14": {
+  "name": "@rolldown/binding-darwin-arm64",
+  "version": "1.2.14",
+  "platform": "darwin/arm64",
+  "license": "MIT",
+  "licenseFile": null,
+  "licenseSha256": null,
+  "licenseFirstLine": null,
+  "recordedOn": "darwin-arm64"
+ },
+ "@typescript/typescript-darwin-arm64@7.0.2": {
+  "name": "@typescript/typescript-darwin-arm64",
+  "version": "7.0.2",
+  "platform": "darwin/arm64",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "licenseSha256": "a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61",
+  "licenseFirstLine": "Apache License",
+  "recordedOn": "darwin-arm64"
+ },
+ "fsevents@2.3.3": {
+  "name": "fsevents",
+  "version": "2.3.3",
+  "platform": "darwin",
+  "license": "MIT",
+  "licenseFile": "LICENSE",
+  "licenseSha256": "2a8a5d6197bb97a018b8a190dd3ed853d750ca87c8e80c17aad41d6c6ff448e1",
+  "licenseFirstLine": "MIT License",
+  "recordedOn": "darwin-arm64"
+ },
+ "lightningcss-darwin-arm64@1.33.0": {
+  "name": "lightningcss-darwin-arm64",
+  "version": "1.33.0",
+  "platform": "darwin/arm64",
+  "license": "MPL-2.0",
+  "licenseFile": "LICENSE",
+  "licenseSha256": "5eba353fe5076ac3432177f8ab1cf75e3afcd0584251e37c3bfead5f447d040e",
+  "licenseFirstLine": "Mozilla Public License Version 2.0",
+  "recordedOn": "darwin-arm64"
+ }
+}

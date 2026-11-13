@@ -1,8 +1,9 @@
-import { chmodSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InputHelper, inputHelperArgs, parseInputLine, UptimeMap, windowIdOf, type PointerEvent, type WindowBoundsEvent } from './input-helper';
 
+// Started through node, as helper-client.test.ts does: Windows cannot run a script by its shebang.
 const FAKE = join(import.meta.dirname, '__fixtures__', 'fake-input.mjs');
 const REAL = resolve(import.meta.dirname, '..', '..', '..', '..', '..', 'native', 'input-macos', 'bin', 'zeyvola-input');
 
@@ -50,10 +51,9 @@ describe('pointer helper protocol', () => {
 
 describe('pointer helper process', () => {
   it('starts, turns events into epoch-timed clicks and scrolls, and stops', async () => {
-    chmodSync(FAKE, 0o755);
     // The lines were written at uptime 1000.6 s and arrive at epoch 2_000_005 ms.
     let clockMs = 0;
-    const helper = new InputHelper(FAKE, () => clockMs, []);
+    const helper = new InputHelper(process.execPath, () => clockMs, [FAKE]);
     const events: PointerEvent[] = [];
     helper.on('event', (e: PointerEvent) => events.push(e));
     clockMs = 2_000_000 + 5; // the first chunk (ready + events) arrives together
@@ -69,9 +69,8 @@ describe('pointer helper process', () => {
   });
 
   it('reports the window bounds on the same epoch clock, known as soon as the helper is ready', async () => {
-    chmodSync(FAKE, 0o755);
     let clockMs = 0;
-    const helper = new InputHelper(FAKE, () => clockMs, ['--window', '42']);
+    const helper = new InputHelper(process.execPath, () => clockMs, [FAKE, '--window', '42']);
     const windows: WindowBoundsEvent[] = [];
     helper.on('window', (w: WindowBoundsEvent) => windows.push(w));
     clockMs = 2_000_000 + 5;

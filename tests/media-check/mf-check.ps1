@@ -342,17 +342,23 @@ public static class ZeyvolaMf {
     return h;
   }
 
-  /// One second of 640x360 NV12 (a moving bar) through the Sink Writer's default H.264 encoder.
-  static Hashtable EncodeH264(string path) {
+  /// `frames` frames of W x H NV12 at 30 fps (a moving bar) through the Sink Writer's default
+  /// H.264 encoder: no attributes on the writer (so no hardware transforms are asked for), 2 Mbit/s
+  /// per 640x360 (scaled by area), progressive, square pixels. Reports the time of the writes.
+  static Hashtable EncodeH264(string path, int W, int H, int frames) {
     var r = new Hashtable();
     IntPtr writer = IntPtr.Zero, outType = IntPtr.Zero, inType = IntPtr.Zero;
-    const int W = 640, H = 360, FPS = 30;
+    const int FPS = 30;
+    int bitrate = (int)(2000000L * W * H / (640 * 360));
+    r["input"] = "NV12"; r["output"] = "H.264 (MFVideoFormat_H264) in MP4"; r["width"] = W; r["height"] = H; r["fps"] = FPS; r["frames"] = frames; r["bitrate"] = bitrate;
+    r["writerAttributes"] = "none (MFCreateSinkWriterFromURL attributes = NULL)";
+    var fill = new System.Diagnostics.Stopwatch(); var total = System.Diagnostics.Stopwatch.StartNew();
     try {
       Check(MFCreateSinkWriterFromURL(path, IntPtr.Zero, IntPtr.Zero, out writer), "MFCreateSinkWriterFromURL");
       Check(MFCreateMediaType(out outType), "MFCreateMediaType");
       SetGuid(outType, MF_MT_MAJOR_TYPE, MFMediaType_Video);
       SetGuid(outType, MF_MT_SUBTYPE, MFVideoFormat_H264);
-      SetInt(outType, MF_MT_AVG_BITRATE, 2000000);
+      SetInt(outType, MF_MT_AVG_BITRATE, bitrate);
       SetInt(outType, MF_MT_INTERLACE_MODE, 2); // progressive
       SetLong(outType, MF_MT_FRAME_SIZE, ((long)W << 32) | H);
       SetLong(outType, MF_MT_FRAME_RATE, ((long)FPS << 32) | 1);
@@ -370,8 +376,11 @@ public static class ZeyvolaMf {
       Check(M<FnSelf>(writer, W_BeginWriting)(writer), "BeginWriting");
       int size = W * H * 3 / 2;
       byte[] frame = new byte[size];
-      for (int i = 0; i < FPS; i++) {
-        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) frame[y * W + x] = (byte)(x >= i * 18 && x < i * 18 + 80 ? 220 : 40 + y / 8);
+      int barStep = Math.Max(1, (W - 80) / Math.Max(1, frames));
+      for (int i = 0; i < frames; i++) {
+        fill.Start();
+        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) frame[y * W + x] = (byte)(x >= i * barStep && x < i * barStep + 80 ? 220 : 40 + y * 160 / H);
+        fill.Stop();
         for (int j = W * H; j < size; j++) frame[j] = 128;
         IntPtr buf, sample, data; int max, cur;
         Check(MFCreateMemoryBuffer(size, out buf), "MFCreateMemoryBuffer");
@@ -388,6 +397,10 @@ public static class ZeyvolaMf {
         Check(hr, "WriteSample");
       }
       Check(M<FnSelf>(writer, W_Finalize)(writer), "Finalize");
+      total.Stop();
+      double encodeMs = total.Elapsed.TotalMilliseconds - fill.Elapsed.TotalMilliseconds;
+      r["encodeMs"] = Math.Round(encodeMs, 1);
+      r["framesPerSecond"] = Math.Round(frames / (encodeMs / 1000.0), 1);
       r["ok"] = true;
     } catch (Exception e) {
       r["ok"] = false; r["error"] = e.Message;
@@ -402,13 +415,19 @@ public static class ZeyvolaMf {
     r["h264Decoders"] = Both(MFT_CATEGORY_VIDEO_DECODER, MFMediaType_Video, MFVideoFormat_H264, true);
     r["aacEncoders"] = Both(MFT_CATEGORY_AUDIO_ENCODER, MFMediaType_Audio, MFAudioFormat_AAC, false);
     r["aacDecoders"] = Both(MFT_CATEGORY_AUDIO_DECODER, MFMediaType_Audio, MFAudioFormat_AAC, true);
-    string file = System.IO.Path.Combine(folder, "mf-h264-encode-test.mp4");
-    var enc = EncodeH264(file);
-    if ((bool)enc["ok"]) {
-      enc["bytes"] = new System.IO.FileInfo(file).Length;
-      enc["decodedBack"] = Probe(file);
+    // A small one, and the app's export size (1080p30, 2 s).
+    var tests = new List<Hashtable>();
+    foreach (int[] size in new int[][] { new int[] { 640, 360, 30 }, new int[] { 1920, 1080, 60 } }) {
+      string file = System.IO.Path.Combine(folder, string.Format("mf-h264-encode-test-{0}x{1}.mp4", size[0], size[1]));
+      var enc = EncodeH264(file, size[0], size[1], size[2]);
+      if ((bool)enc["ok"]) {
+        enc["bytes"] = new System.IO.FileInfo(file).Length;
+        enc["decodedBack"] = Probe(file);
+      }
+      tests.Add(enc);
     }
-    r["h264EncodeTest"] = enc;
+    r["h264EncodeTest"] = tests[0];
+    r["h264EncodeTest1080p"] = tests[1];
     return r;
   }
 }

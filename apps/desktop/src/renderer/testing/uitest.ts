@@ -271,7 +271,10 @@ export async function runUiTest(): Promise<unknown> {
       const files = await invoke<string[]>('smoke:listDir', { path: chosenFolder });
       expect(files.length === 1 && files[0] === `Arayüz testi 16x9.${ext}`, `iptalden sonra seçilen klasörde: ${files.join(', ')}`);
     }
-    expect(button(t("Dışa aktar"), q('.export-modal footer')!), 'iptalden sonra Dışa aktar düğmesi yok');
+    // The window asks the encoders again after a cancel; on a slow machine that takes a moment.
+    const again = await until(() => button(t("Dışa aktar"), q('.export-modal footer')!), 10_000);
+    const state = all<HTMLButtonElement>('button', q('.export-modal footer')!).map((b) => `${text(b)}${b.disabled ? ' (devre dışı)' : ''}`).join(', ');
+    expect(again, `iptalden 10 sn sonra Dışa aktar düğmesi yok; alt çubuk: ${state || 'boş'}; ${text(q('.export-unsupported')) || ''}`);
     click(button(t("Kapat"), dialog!), 'pencereyi kapat');
     expect(await until(() => !q('.export-modal'), 2000), 'pencere kapanmadı');
   });
@@ -319,7 +322,7 @@ export async function runUiTest(): Promise<unknown> {
       checks.push({
         name: 'Gerçek ekran kaydı: video ekranın en-boy oranında (kırpılmış ya da sıkıştırılmış değil)',
         ok: Math.abs(screen.width / screen.height - display.w / display.h) < 0.02,
-        detail: `ekran ${display.w}×${display.h} (ölçek ${display.scale}), kaynak kaydı ${rc.source?.width}×${rc.source?.height}, video ${screen.width}×${screen.height}`,
+        detail: `ekran ${display.w}×${display.h} (ölçek ${display.scale}), istenen (ideal) ${display.w * display.scale}×${display.h * display.scale}, kaynak kaydı (getSettings) ${rc.source?.width}×${rc.source?.height}, video ${screen.width}×${screen.height}, kenar bantları ${screen.bars ? `sol ${screen.bars.left} sağ ${screen.bars.right} üst ${screen.bars.top} alt ${screen.bars.bottom} px` : 'ölçülemedi'}`,
       });
     }
   }
@@ -394,7 +397,7 @@ interface RealCapture {
   backend: string | null;
   clicksCapability: boolean;
   seconds: number;
-  screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean } | null;
+  screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean; bars: Bars | null } | null;
   /** What the recording says about its screen video, and the display it recorded. */
   source: { width?: number; height?: number; fps?: number; seconds: number } | null;
   display: { w: number; h: number; scale: number } | null;
@@ -445,7 +448,7 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     // MediaRecorder's WebM has no duration in its header: Chromium reports Infinity until it has
     // looked at the end of the file.
     const duration = Number.isFinite(v.duration) ? v.duration : await durationBySeeking(url(src.file));
-    screen = { width: v.width, height: v.height, duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01) };
+    screen = { width: v.width, height: v.height, duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01), bars: await sideBars(url(src.file), 2.5) };
   }
   let micInfo: RealCapture['mic'] = null;
   if (rec!.sources.mic) {
@@ -493,6 +496,35 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   expect(cursor.moves > 0, `imleç günlüğü boş · ${summary}`);
   if (driver && web?.capabilities.clicks) expect(driver.matched === driver.clicks, `tıklamalar imleç günlüğünde eksik ya da yanlış yerde · ${summary}`);
   return out;
+}
+
+/** Uniform dark columns or rows at the frame's edges (letterbox/pillarbox), in pixels of the video. */
+interface Bars { left: number; right: number; top: number; bottom: number }
+async function sideBars(src: string, at: number): Promise<Bars | null> {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.src = src;
+  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
+  if (!ok) return null;
+  v.currentTime = at;
+  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
+  const w = v.videoWidth;
+  const h = v.videoHeight;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(v, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  v.removeAttribute('src');
+  v.load();
+  const dark = (x: number, y: number) => { const i = (y * w + x) * 4; return d[i]! + d[i + 1]! + d[i + 2]! < 24; };
+  const col = (x: number) => { for (let y = 0; y < h; y += 4) if (!dark(x, y)) return false; return true; };
+  const row = (y: number) => { for (let x = 0; x < w; x += 4) if (!dark(x, y)) return false; return true; };
+  let left = 0; while (left < w / 2 && col(left)) left++;
+  let right = 0; while (right < w / 2 && col(w - 1 - right)) right++;
+  let top = 0; while (top < h / 2 && row(top)) top++;
+  let bottom = 0; while (bottom < h / 2 && row(h - 1 - bottom)) bottom++;
+  return { left, right, top, bottom };
 }
 
 /** Duration of a video whose header has none: seek far past the end, then read it. */

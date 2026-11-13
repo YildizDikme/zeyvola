@@ -94,6 +94,15 @@ jobs:
         continue-on-error: true
         run: pnpm typecheck
 
+      # This system's platform-specific build tools (esbuild, rolldown, TypeScript, lightningcss),
+      # read from the installed packages' package.json and license files, for
+      # docs/licenses/platform-packages.json. Printed only; nothing in the checkout changes.
+      - name: Platform paketleri / platform packages (license records)
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:OUT" | Out-Null
+          node tools/license-inventory.mjs --print-platform | Tee-Object -FilePath "$env:OUT\platform-packages-win32-x64.json"
+
       - name: Birim testleri / unit tests
         id: unit
         continue-on-error: true
