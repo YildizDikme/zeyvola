@@ -1,14 +1,24 @@
 // Runs one of the in-app test suites (src/shared/test-suite.ts) and prints its report.
 //
+//   node scripts/run-suite.mjs smoke [--no-build]
 //   node scripts/run-suite.mjs perf [--label <name>] [--baseline <file|label>] [--no-build]
 //   node scripts/run-suite.mjs ui   [--no-build]
 //   node scripts/run-suite.mjs docs [--no-build]
 //
+// Common options:
+//   --app <path>      run a packaged app instead of the development Electron (no build): the .app
+//                     bundle (macOS), the folder with Zeyvola.exe (Windows) or the executable itself
+//   --out <folder>    keep the report, the app's log and the screenshots there (CI artifacts)
+//   --timeout <min>   stop the app after this many minutes (default 15)
+//
 // The app starts with a temporary projects folder and synthetic camera and microphone; the
 // user's own projects and settings are never read. ZEYVOLA_DIST picks the distribution, as in
-// every other build.
+// every other build (with --app it only labels the output: the package decides).
+// Exported MP4 files are checked with the operating system's own decoders (tests/media-check),
+// which live outside the package: the probe's path is given to the app (ZEYVOLA_MEDIA_CHECK).
+// The app's log is searched for OpenH264, which no Zeyvola code path may start.
 import { execFileSync, spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -20,6 +30,7 @@ const repo = resolve(appDir, '..', '..');
 const require = createRequire(import.meta.url);
 
 const SUITES = {
+  smoke: { flag: '--smoke', title: 'Duman testi' },
   perf: { flag: '--perftest', title: 'Performans testi' },
   ui: { flag: '--uitest', title: 'Arayüz testi' },
   docs: { flag: '--docshots', title: 'Belge görüntüleri' },
@@ -28,7 +39,7 @@ const SUITES = {
 const args = process.argv.slice(2).filter((a) => a !== '--');
 const suite = args[0];
 if (!suite || !(suite in SUITES)) {
-  console.error(`Kullanım: node scripts/run-suite.mjs <${Object.keys(SUITES).join('|')}> [--label ad] [--baseline dosya] [--no-build]`);
+  console.error(`Kullanım: node scripts/run-suite.mjs <${Object.keys(SUITES).join('|')}> [--app paket] [--out klasör] [--timeout dk] [--label ad] [--baseline dosya] [--no-build]`);
   process.exit(2);
 }
 const after = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] ?? null : null; };
@@ -57,27 +68,74 @@ if (suite === 'perf' && after('--baseline')) {
   baseline = { file, ...JSON.parse(readFileSync(file, 'utf8')) };
 }
 
-if (!args.includes('--no-build')) {
-  execFileSync('pnpm', ['run', 'build'], { cwd: appDir, stdio: ['ignore', 'ignore', 'inherit'] });
+// --app: the executable inside a packaged app.
+function packagedExecutable(p) {
+  const full = resolve(p);
+  if (!existsSync(full)) return null;
+  if (full.endsWith('.app')) {
+    const macos = join(full, 'Contents', 'MacOS');
+    const name = existsSync(macos) ? readdirSync(macos)[0] : null;
+    return name ? join(macos, name) : null;
+  }
+  if (statSync(full).isDirectory()) {
+    const exe = readdirSync(full).find((f) => /^zeyvola\.exe$/i.test(f)) ?? readdirSync(full).find((f) => f.toLowerCase().endsWith('.exe'));
+    return exe ? join(full, exe) : null;
+  }
+  return full;
+}
+const appArg = after('--app');
+const packaged = appArg ? packagedExecutable(appArg) : null;
+if (appArg && !packaged) {
+  console.error(`Paketlenmiş uygulama bulunamadı: ${appArg}`);
+  process.exit(2);
+}
+const outArg = after('--out');
+const outDir = outArg ? resolve(outArg) : null;
+const timeoutMin = Number(after('--timeout') ?? 15);
+
+if (!packaged && !args.includes('--no-build')) {
+  execFileSync('pnpm', ['run', 'build'], { cwd: appDir, stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' });
 }
 
 const work = mkdtempSync(join(tmpdir(), `zeyvola-${suite}-`));
 const reportFile = join(work, 'report.json');
 const shotsDir = join(work, 'shots');
-const electron = require('electron');
-const child = spawn(electron, [appDir, SUITES[suite].flag, '--smoke-report', reportFile], {
-  cwd: appDir,
-  env: { ...process.env, ZEYVOLA_SHOTS_DIR: shotsDir },
+const logFile = join(work, 'app.log');
+const mediaCheck = join(repo, 'tests', 'media-check', 'av-check.mjs');
+// Chromium's own log goes to stderr (on Windows it would otherwise go to a file next to the app).
+const suiteArgs = [SUITES[suite].flag, '--smoke-report', reportFile, '--enable-logging=stderr'];
+const [cmd, cmdArgs] = packaged ? [packaged, suiteArgs] : [require('electron'), [appDir, ...suiteArgs]];
+const child = spawn(cmd, cmdArgs, {
+  cwd: packaged ? dirname(packaged) : appDir,
+  env: { ...process.env, ZEYVOLA_SHOTS_DIR: shotsDir, ZEYVOLA_MEDIA_CHECK: mediaCheck },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
-let errors = '';
-child.stdout.on('data', () => undefined); // the report is read from the file
-child.stderr.on('data', (d) => { errors += d; });
+let log = '';
+child.stdout.on('data', (d) => { log += d; }); // the report itself is read from the file
+child.stderr.on('data', (d) => { log += d; });
+let timedOut = false;
+const killer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMin * 60_000);
+const t0 = Date.now();
 const code = await new Promise((res) => child.on('exit', (c) => res(c ?? 1)));
+clearTimeout(killer);
+writeFileSync(logFile, log);
+// OpenH264 prints "[OpenH264] this = 0x…" lines when it is started; Zeyvola never asks for it.
+const openH264Lines = log.split('\n').filter((l) => l.includes('[OpenH264]')).length;
+const errors = log;
+/** Copies what this run produced to --out (report, log, screenshots) for CI artifacts. */
+function keep(extra = {}) {
+  if (!outDir) return;
+  mkdirSync(outDir, { recursive: true });
+  copyFileSync(logFile, join(outDir, `${suite}-app.log`));
+  if (existsSync(reportFile)) copyFileSync(reportFile, join(outDir, `${suite}-report.json`));
+  if (existsSync(shotsDir)) cpSync(shotsDir, join(outDir, `${suite}-shots`), { recursive: true });
+  writeFileSync(join(outDir, `${suite}-run.json`), `${JSON.stringify({ suite, app: packaged ? 'packaged' : 'development', platform: process.platform, arch: process.arch, exitCode: code, timedOut, seconds: Math.round((Date.now() - t0) / 1000), openH264Lines, ...extra }, null, 1)}\n`);
+}
 
 if (!existsSync(reportFile)) {
-  console.error(`${SUITES[suite].title}: rapor yazılmadı (çıkış kodu ${code}).`);
-  if (errors.trim()) console.error(errors.trim().split('\n').slice(-15).join('\n'));
+  console.error(`${SUITES[suite].title}: rapor yazılmadı (çıkış kodu ${code}${timedOut ? `, ${timeoutMin} dk sonra durduruldu` : ''}).`);
+  if (errors.trim()) console.error(errors.trim().split('\n').slice(-25).join('\n'));
+  keep({ ok: false });
   process.exit(1);
 }
 const report = JSON.parse(readFileSync(reportFile, 'utf8'));
@@ -86,7 +144,7 @@ const pad = (s, n) => String(s) + ' '.repeat(Math.max(0, n - [...String(s)].leng
 const padL = (s, n) => ' '.repeat(Math.max(0, n - [...String(s)].length)) + String(s);
 const num = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(Math.abs(v) < 10 ? 2 : 1));
 
-console.log(`\n${SUITES[suite].title} · dağıtım ${process.env.ZEYVOLA_DIST ?? 'mp4'}${report.gpu ? ` · ${report.gpu}` : ''}`);
+console.log(`\n${SUITES[suite].title} · ${packaged ? 'paketlenmiş uygulama' : 'geliştirme Electron’u'} · dağıtım ${report.dist ?? process.env.ZEYVOLA_DIST ?? 'mp4'}${report.gpu ? ` · ${report.gpu}` : ''}`);
 
 if (suite === 'perf') {
   if (baseline) {
@@ -138,6 +196,13 @@ if (suite === 'docs' && report.ok) {
   console.log(`${(report.shots ?? []).length} görüntü → ${shown(shotsOut)}/`);
 }
 
+if (suite === 'smoke' && report.capabilities) {
+  console.log('\nYetenekler (WebCodecs, MediaRecorder):');
+  for (const [k, v] of Object.entries(report.capabilities)) console.log(`  ${pad(k, 34)} ${v}`);
+}
+// Part of every suite's verdict: a run that started OpenH264 fails, whatever the app reported.
+report.checks = [...(report.checks ?? []), { name: 'OpenH264 hiç başlatılmadı (uygulama günlüğünde [OpenH264] satırı yok)', ok: openH264Lines === 0, detail: `${openH264Lines} satır` }];
+report.ok = report.ok && openH264Lines === 0;
 if (report.checks?.length) console.log('');
 for (const c of report.checks ?? []) {
   console.log(`${c.ok ? '  ✓' : '  ✗'} ${c.name}${c.detail ? `  — ${c.detail}` : ''}${c.ms ? `  (${Math.round(c.ms)} ms)` : ''}`);
@@ -145,5 +210,7 @@ for (const c of report.checks ?? []) {
 if (report.error) console.error(`Hata: ${report.error}`);
 const failed = (report.checks ?? []).filter((c) => !c.ok).length;
 console.log(report.ok ? `\n${SUITES[suite].title}: tamam.` : `\n${SUITES[suite].title}: ${failed || 1} sorun.`);
+keep({ ok: report.ok, checks: (report.checks ?? []).length, failed });
+if (outDir) console.log(`Rapor, günlük ve görüntüler: ${shown(outDir)}`);
 rmSync(work, { recursive: true, force: true });
 process.exit(report.ok ? 0 : 1);

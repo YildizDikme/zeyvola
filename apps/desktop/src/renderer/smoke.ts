@@ -13,9 +13,9 @@ import { secondsToTicks } from '@zeyvola/timing';
 import { suggestZooms } from '@zeyvola/zoom-engine';
 import { api } from './api';
 import { t } from './i18n';
-import { pickVideoConfig, runExport } from './export/exporter';
+import { checkExportSupport, pickVideoConfig, runExport } from './export/exporter';
 import { synthesizeRecording } from './smoke-fixtures';
-import { createSampleProject, decodeSound, frame, mediaUrl, probeVideo, sleep, until, type Check } from './testing/harness';
+import { createSampleProject, decodeSound, exportsRel, frame, mediaUrl, probeVideo, sleep, until, type Check } from './testing/harness';
 import { PATENT_POOL_CODECS, PROFILE } from '../shared/distribution';
 import { importVideo } from './screens/editor/import-media';
 import { warmUpCamera } from './capture-devices';
@@ -295,6 +295,31 @@ async function codecMatrix(): Promise<Record<string, string>> {
 
 /** Encodes 2 s of compositor output, muxes it with our writer and checks Chromium can play and seek it. */
 const EXPORT_ORDER = ['mp4', 'webm'] as const;
+
+/**
+ * Set when this device cannot write MP4 (no H.264 hardware encoder, or no AAC encoder): the message
+ * the export window shows. The MP4 checks are then replaced by a check of that message, and the
+ * export checks run with WebM, which every device writes.
+ */
+let mp4Missing: string | null = null;
+const usableFormats = () => EXPORT_ORDER.filter((f) => PROFILE.formats.includes(f) && !(f === 'mp4' && mp4Missing));
+const mainFormat = (): 'mp4' | 'webm' => (PROFILE.defaultExport === 'mp4' && mp4Missing ? 'webm' : PROFILE.defaultExport);
+
+/** Asks the encoders the way the export window does, before any MP4 check runs. */
+async function mp4Support(checks: Check[]): Promise<void> {
+  const sample = await createSampleProject(2, 'MP4 desteği');
+  const { project } = await loadProject(sample.id);
+  const ask = (format: 'mp4' | 'webm') => checkExportSupport(project, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'high', includeAudio: true });
+  const mp4 = await ask('mp4');
+  if (mp4.ok) return; // the export checks below write and check real MP4 files
+  mp4Missing = mp4.message;
+  const webm = await ask('webm');
+  checks.push({
+    name: 'MP4 yazılamayan cihaz: dışa aktarma başlamadan söylenir, WebM önerilir, WebM yazılabilir',
+    ok: /H\.264|AAC/.test(mp4.message) && mp4.suggestWebm && webm.ok,
+    detail: `MP4: "${mp4.message}" · WebM önerisi ${mp4.suggestWebm ? 'var' : 'yok'} · WebM: ${webm.ok ? webm.encoder : webm.message} · bu cihazda MP4 dışa aktarma denetimleri atlandı`,
+  });
+}
 /** Files from the round trips (picture + sound), reused as "videos from the computer". */
 const roundTripFiles: Partial<Record<'mp4' | 'webm', Uint8Array>> = {};
 
@@ -733,7 +758,9 @@ async function importing(store: EditorStore, checks: Check[], shot: (name: strin
   let detail = '';
   // Two videos with sound from the round trips: MP4 and WebM, or two WebM files where the
   // distribution only exports WebM (VP8 profile).
-  const incoming = PROFILE.formats.length > 1
+  // Two WebM files also where this device writes no MP4 (no H.264 encoder).
+  const withMp4 = PROFILE.formats.length > 1 && !!roundTripFiles.mp4;
+  const incoming = withMp4
     ? [['incoming/sesli.mp4', roundTripFiles.mp4], ['incoming/klip.webm', roundTripFiles.webm]] as const
     : [['incoming/sesli.webm', roundTripFiles.webm], ['incoming/klip.webm', roundTripFiles.webm]] as const;
   if (incoming.every(([, data]) => data)) {
@@ -763,7 +790,7 @@ async function importing(store: EditorStore, checks: Check[], shot: (name: strin
   await shot('14-imported-videos');
   checks.push({ name: 'Hata mesajı sade: teknik önek gösterilmez', ok: !!msg && !msg.includes('Error invoking'), detail: msg.slice(0, 120) });
   checks.push({ name: 'Video ekle: + düğmesi zaman çizelgesinin sonunda', ok: buttonAtEnd });
-  checks.push({ name: PROFILE.formats.length > 1 ? 'Video ekle: MP4 ve WebM sona eklenir, kendi sesiyle' : 'Video ekle: iki WebM sona eklenir, kendi sesiyle', ok: withSound, detail });
+  checks.push({ name: withMp4 ? 'Video ekle: MP4 ve WebM sona eklenir, kendi sesiyle' : 'Video ekle: iki WebM sona eklenir, kendi sesiyle', ok: withSound, detail });
   checks.push({ name: 'Video ekle: sessiz videoya ses izi eklenmez', ok: silent });
   checks.push({ name: 'Video ekle: bozuk dosya ve başka türler reddedilir, proje değişmez', ok: refused });
 }
@@ -1027,7 +1054,7 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
   await importing(store, checks, shot, `${dir}/screen.${ext}`);
 
   // Real export to disk, then play the file back through the media protocol.
-  for (const format of EXPORT_ORDER.filter((f) => PROFILE.formats.includes(f))) {
+  for (const format of usableFormats()) {
     const t1 = performance.now();
     const ctl = new AbortController();
     const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
@@ -1037,15 +1064,25 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
     let detail = result.message ?? '';
     let ok = result.phase === 'done' && !!result.path;
     if (ok && result.path) {
-      const rel = result.path.slice(result.path.indexOf('/exports/') + 1);
-      const v = document.createElement('video');
-      v.muted = true;
-      v.crossOrigin = 'anonymous';
-      v.src = store.getState().mediaBase + rel.split('/').map(encodeURIComponent).join('/');
-      const loaded = await new Promise<boolean>((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
+      const rel = exportsRel(result.path);
       const expected = sequenceDuration(store.project) / 705_600_000;
-      ok = loaded && Math.abs(v.duration - expected) < 0.2 && v.videoWidth === 1920 && v.videoHeight === 1080;
-      detail = `${result.encoder}, ${v.videoWidth}×${v.videoHeight}, ${v.duration.toFixed(2)} sn (beklenen ${expected.toFixed(2)}), ${((result.bytes ?? 0) / 1024 / 1024).toFixed(1)} MB, ${(result.total / (ms / 1000)).toFixed(1)} kare/sn`;
+      // An MP4 is opened with the system's own decoders when the run has the probe (the packaged
+      // app's Chromium has no AAC decoder); everything else with Chromium.
+      const sys = format === 'mp4' ? await window.zeyvola.invoke('smoke:avCheck', { path: result.path, duration: expected }) as SystemProbe : null;
+      let seen: { duration: number; width: number; height: number; by: string };
+      if (sys && !sys.skipped) {
+        seen = { duration: sys.duration, width: Math.round(sys.video?.width ?? 0), height: Math.round(sys.video?.height ?? 0), by: sys.engine ?? 'sistem' };
+        if (!sys.ok) detail = `${sys.engine}: ${sys.problems.join('; ')} · `;
+      } else {
+        const v = document.createElement('video');
+        v.muted = true;
+        v.crossOrigin = 'anonymous';
+        v.src = store.getState().mediaBase + rel.split('/').map(encodeURIComponent).join('/');
+        const loaded = await new Promise<boolean>((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
+        seen = { duration: loaded ? v.duration : Number.NaN, width: v.videoWidth, height: v.videoHeight, by: 'Chromium' };
+      }
+      ok = (!sys || sys.skipped || sys.ok) && Math.abs(seen.duration - expected) < 0.2 && seen.width === 1920 && seen.height === 1080;
+      detail += `${result.encoder}, ${seen.by}: ${seen.width}×${seen.height}, ${seen.duration.toFixed(2)} sn (beklenen ${expected.toFixed(2)}), ${((result.bytes ?? 0) / 1024 / 1024).toFixed(1)} MB, ${(result.total / (ms / 1000)).toFixed(1)} kare/sn`;
     }
     checks.push({ name: `Gerçek proje dışa aktarımı ${format.toUpperCase()} 1080p30 (zoom + kamera + gizleme + büyüteç + ses)`, ok, detail, ms });
   }
@@ -1056,12 +1093,12 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
     for (const [resolution, fps] of [['1080', 30], ['1080', 60], ['2160', 30], ['2160', 60]] as const) {
       const t1 = performance.now();
       const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
-        variantId: 'v_16x9', format: PROFILE.defaultExport, resolution, fps, quality: 'high', includeAudio: true,
+        variantId: 'v_16x9', format: mainFormat(), resolution, fps, quality: 'high', includeAudio: true,
       }, () => undefined, new AbortController().signal);
       const sec = (performance.now() - t1) / 1000;
       const seconds = sequenceDuration(store.project) / 705_600_000;
       checks.push({
-        name: `Dışa aktarma süresi ${PROFILE.defaultExport.toUpperCase()} ${resolution === '2160' ? '4K' : '1080p'}${fps}`,
+        name: `Dışa aktarma süresi ${mainFormat().toUpperCase()} ${resolution === '2160' ? '4K' : '1080p'}${fps}`,
         ok: result.phase === 'done',
         detail: `${result.encoder}, ${seconds.toFixed(1)} sn video ${sec.toFixed(1)} sn'de (${(result.total / sec).toFixed(1)} kare/sn), ${((result.bytes ?? 0) / 1024 / 1024).toFixed(1)} MB`,
         ms: sec * 1000,
@@ -1166,12 +1203,12 @@ async function aacImport(store: EditorStore, checks: Check[]): Promise<void> {
     return q;
   });
   const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
-    variantId: 'v_16x9', format: PROFILE.defaultExport, resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
+    variantId: 'v_16x9', format: mainFormat(), resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
   }, () => undefined, new AbortController().signal);
   let exportOk = false;
   let detail = result.message ?? '';
   if (result.phase === 'done' && result.path) {
-    const url = media(result.path.slice(result.path.indexOf('/exports/') + 1));
+    const url = media(exportsRel(result.path));
     const out = await decodeSound(url);
     const t = toneStarts(out.getChannelData(0), out.sampleRate);
     const f = await flashStarts(url, 30, [[0.3, 0.8], [2.3, 2.8]], 0.55);
@@ -1180,7 +1217,7 @@ async function aacImport(store: EditorStore, checks: Check[]): Promise<void> {
     exportOk = near(t, [0.5, 2.5], 0.03) && near(f, [0.5, 2.5], 0.04) && near(t, f, 0.04) && Math.abs(out.duration - expected) < 0.1;
     detail = `${result.encoder} · süre ${out.duration.toFixed(2)} sn (beklenen ${expected.toFixed(2)}) · ton ${t.map((x) => x.toFixed(3)).join(', ')} · flaş ${f.map((x) => x.toFixed(3)).join(', ')} sn`;
   }
-  checks.push({ name: `AAC sesli video: baştan 0,5 sn kesilip ${PROFILE.defaultExport.toUpperCase()} dışa aktarılınca ses ve görüntü birlikte kayar, eşzamanlı kalır`, ok: exportOk, detail });
+  checks.push({ name: `AAC sesli video: baştan 0,5 sn kesilip ${mainFormat().toUpperCase()} dışa aktarılınca ses ve görüntü birlikte kayar, eşzamanlı kalır`, ok: exportOk, detail });
 }
 
 /**
@@ -1250,13 +1287,13 @@ async function realRecording(checks: Check[], shots: string[]): Promise<void> {
 
   const t1 = performance.now();
   const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
-    variantId: 'v_16x9', format: PROFILE.formats.includes('mp4') ? 'mp4' : 'webm', resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
+    variantId: 'v_16x9', format: usableFormats().includes('mp4') ? 'mp4' : 'webm', resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
   }, () => undefined, new AbortController().signal);
   const ms = performance.now() - t1;
   let ok = result.phase === 'done' && !!result.path;
   let detail = result.message ?? '';
   if (ok && result.path) {
-    const rel = result.path.slice(result.path.indexOf('/exports/') + 1);
+    const rel = exportsRel(result.path);
     const v = document.createElement('video');
     v.muted = true;
     v.crossOrigin = 'anonymous';
@@ -1306,7 +1343,7 @@ const exportPath = (project: Project, ext: string) => `exports/${project.name} $
  * the file, and no file left in exports/ (exporter.ts: ExportMedia.frameAt, export-writer).
  */
 async function exportWithBadSource(checks: Check[]): Promise<void> {
-  const format = PROFILE.defaultExport;
+  const format = mainFormat();
   const cases: [string, (p: Project, screenFile: string) => Promise<{ project: Project; file: string }>][] = [
     ['bozuk', async (p, screenFile) => {
       // Random bytes in place of the screen video.
@@ -1349,7 +1386,7 @@ async function exportWithBadSource(checks: Check[]): Promise<void> {
  * finishes with a full picture. Again and again: it stops with a clear message and leaves no file.
  */
 async function exportContextLoss(checks: Check[]): Promise<void> {
-  const format = PROFILE.defaultExport;
+  const format = mainFormat();
   // Every WebGL2 context the export makes, seen from outside: the app is not changed for this.
   const made: WebGL2RenderingContext[] = [];
   const original = HTMLCanvasElement.prototype.getContext;
@@ -1413,7 +1450,10 @@ export async function runSmokeTests(): Promise<unknown> {
   try { await privacyChecks(checks); } catch (e) { checks.push({ name: 'Gizlilik testleri', ok: false, detail: (e as Error).message }); }
   try { await magnifierChecks(checks); } catch (e) { checks.push({ name: 'Büyüteç testleri', ok: false, detail: (e as Error).message }); }
   try { await contextLifetime(checks); } catch (e) { checks.push({ name: 'WebGL bağlam ömrü', ok: false, detail: (e as Error).message }); }
-  for (const format of EXPORT_ORDER.filter((f) => PROFILE.formats.includes(f))) await roundTrip(format, checks);
+  if (PROFILE.formats.includes('mp4')) {
+    try { await mp4Support(checks); } catch (e) { checks.push({ name: 'MP4 desteği sorusu', ok: false, detail: (e as Error).message }); }
+  }
+  for (const format of usableFormats()) await roundTrip(format, checks);
   await licenseChecks(checks);
   zoomPerf(checks);
   const capabilities = await codecMatrix();
@@ -1444,5 +1484,15 @@ export async function runSmokeTests(): Promise<unknown> {
   try { await realRecording(checks, shots); } catch (e) { checks.push({ name: 'Gerçek kayıt akışı', ok: false, detail: (e as Error).stack ?? String(e) }); }
   await exportWithBadSource(checks);
   await exportContextLoss(checks);
-  return { ok: checks.every((c) => c.ok), gpu, checks, capabilities, shots, userAgent: navigator.userAgent };
+  return { ok: checks.every((c) => c.ok), gpu, checks, capabilities, shots, userAgent: navigator.userAgent, ...(mp4Missing ? { mp4Missing } : {}) };
+}
+
+/** What tests/media-check reports through smoke:avCheck (AVFoundation or Media Foundation). */
+interface SystemProbe {
+  ok: boolean;
+  skipped?: boolean;
+  engine?: string;
+  problems: string[];
+  duration: number;
+  video: { width?: number; height?: number } | null;
 }

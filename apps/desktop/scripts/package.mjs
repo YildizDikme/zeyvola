@@ -19,7 +19,7 @@
 // macOS packages get an ad hoc signature, Windows ones none; distribution needs real signing.
 // The executable's version details name Zeyvola and its developer; the icon is still Electron's.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, '..');
 const root = resolve(appDir, '..', '..');
-const { artifact, cached, ELECTRON_VERSION } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
+const { artifact, cached, extractZip, ELECTRON_VERSION } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
 const { writeDist } = await import(join(root, 'tools', 'third-party-notices.mjs'));
 const { setVersionInfo } = await import(join(root, 'tools', 'win-version-info.mjs'));
 
@@ -45,7 +45,11 @@ if (platform === 'win32' && !process.argv.includes('--experimental-windows')) {
   throw new Error('Zeyvola şimdilik yalnızca macOS için dağıtılıyor. Deneysel Windows paketi için: --platform win32 --experimental-windows');
 }
 if (!['arm64', 'x64'].includes(arch)) throw new Error('--arch arm64 | x64');
-if (process.platform !== 'darwin') throw new Error('Paketleme şimdilik yalnızca macOS üzerinde (ditto, codesign, PlistBuddy)');
+// A macOS package needs macOS's own tools (ditto, PlistBuddy, codesign, lipo, swiftc). A Windows
+// package is made on macOS (helper cross-compiled with zig) or on Windows itself (GitHub
+// windows-latest: bsdtar from System32, zig from tools/.cache/zig or ZIG or PATH).
+if (platform === 'darwin' && process.platform !== 'darwin') throw new Error('macOS paketi yalnızca macOS üzerinde derlenir (ditto, codesign, PlistBuddy, lipo)');
+if (platform === 'win32' && !['darwin', 'win32'].includes(process.platform)) throw new Error('Windows paketi macOS ya da Windows üzerinde derlenir');
 
 const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
 /** The app's own copyright line (also in NOTICE and src/shared/brand.ts; brand.test.ts keeps them equal). */
@@ -55,14 +59,18 @@ const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit',
 /** Copies native/<dir>/bin/<name> into the package's resources/bin, building it first if missing. */
 function shipHelper(dir, name) {
   const built = join(root, 'native', dir, 'bin', name);
-  if (!existsSync(built)) sh('bash', [join(root, 'native', dir, 'build.sh')]);
+  if (!existsSync(built)) {
+    if (dir === 'helper-windows' && process.platform === 'win32') buildWindowsHelperOnWindows();
+    else sh('bash', [join(root, 'native', dir, 'build.sh')]);
+  }
   mkdirSync(join(resources, 'bin'), { recursive: true });
   cpSync(built, join(resources, 'bin', name));
 }
 
 // 1) Build the app for this profile (renderer, main, dist/licenses).
 if (!process.argv.includes('--skip-build')) {
-  sh('pnpm', ['run', 'build'], { cwd: appDir, env: { ...process.env, ZEYVOLA_DIST: profile } });
+  // pnpm is pnpm.cmd on Windows, which Node starts only through a shell.
+  sh('pnpm', ['run', 'build'], { cwd: appDir, env: { ...process.env, ZEYVOLA_DIST: profile }, shell: process.platform === 'win32' });
 }
 
 // 2) Official artifacts, verified against SHASUMS256.txt when first downloaded.
@@ -72,10 +80,10 @@ const ffmpegZip = await zip(`ffmpeg:${platform}:${arch}`);
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-// ditto keeps the framework symlinks of the macOS bundle.
-sh('ditto', ['-x', '-k', electronZip, out]);
+// On macOS ditto keeps the framework symlinks of the bundle (extractZip).
+extractZip(electronZip, out);
 const work = mkdtempSync(join(tmpdir(), 'zeyvola-ffmpeg-'));
-sh('ditto', ['-x', '-k', ffmpegZip, work]);
+extractZip(ffmpegZip, work);
 
 let resources;
 let ffmpegTarget;
@@ -206,8 +214,36 @@ if (platform === 'darwin') {
 }
 
 // 5) What really ended up in the package.
-sh('node', [join(root, 'tools', 'codec-audit.mjs'), out, '--profile', profile, '--json', join(out, '..', `codec-audit-${platform}-${arch}.json`)]);
+sh(process.execPath, [join(root, 'tools', 'codec-audit.mjs'), out, '--profile', profile, '--json', join(out, '..', `codec-audit-${platform}-${arch}.json`)]);
 console.log(`Paket: ${out}`);
+
+/**
+ * native/helper-windows/build.sh, step for step, for a Windows host (no POSIX shell needed; on
+ * GitHub runners `bash` may resolve to the WSL launcher). Keep the two in step.
+ */
+function buildWindowsHelperOnWindows() {
+  const dir = join(root, 'native', 'helper-windows');
+  const zig = findZig();
+  mkdirSync(join(dir, 'bin'), { recursive: true });
+  mkdirSync(join(dir, '.build'), { recursive: true });
+  const libs = readdirSync(join(dir, 'imports')).filter((f) => f.endsWith('.def')).sort().map((def) => {
+    const lib = join('.build', def.replace(/\.def$/, '.lib'));
+    sh(zig, ['dlltool', '-m', 'i386:x86-64', '-d', join('imports', def), '-l', lib], { cwd: dir });
+    return lib;
+  });
+  sh(zig, ['cc', '-target', 'x86_64-windows-gnu', '-O2', '-Wall', '-Wextra', '-Wno-unused-parameter',
+    '-nostdinc', '-nostdlib', '-fno-stack-protector', '-mno-stack-arg-probe', '-fno-builtin',
+    '-s', '-Wl,--entry=mainCRTStartup', '-Wl,--subsystem,console',
+    'zeyvola-win.c', 'zeyvola-win.rc', '-o', join('bin', 'zeyvola-win.exe'), ...libs], { cwd: dir });
+  for (const f of ['zeyvola-win.lib', 'zeyvola-win.pdb']) rmSync(join(dir, 'bin', f), { force: true });
+}
+
+/** zig: $ZIG, then tools/.cache/zig/zig(.exe), then the one on PATH. */
+function findZig() {
+  if (process.env.ZIG) return process.env.ZIG;
+  for (const f of ['zig.exe', 'zig']) { const p = join(root, 'tools', '.cache', 'zig', f); if (existsSync(p)) return p; }
+  return 'zig';
+}
 
 function bundleIdFor(p) {
   // The released profile (A) is com.zeyvola.app; until 2026-11-13 that identifier was B's, so a

@@ -115,6 +115,47 @@ function machoHelper(file, label, frameworks, markers, fails) {
   return check;
 }
 
+/**
+ * Import table of a PE32+ executable (PE/COFF specification: optional header data directory 1,
+ * IMAGE_IMPORT_DESCRIPTOR array, 64-bit lookup entries). Read in JavaScript so the audit needs no
+ * objdump, which a Windows machine does not have. Ordinal imports are listed as "#<n>".
+ */
+export function peImports(b) {
+  const pe = b.readUInt32LE(0x3c);
+  if (b.readUInt32LE(pe) !== 0x4550) throw new Error('PE imzası yok');
+  const sections = b.readUInt16LE(pe + 6);
+  const optSize = b.readUInt16LE(pe + 20);
+  const opt = pe + 24;
+  if (b.readUInt16LE(opt) !== 0x20b) throw new Error('PE32+ değil');
+  const importRva = b.readUInt32LE(opt + 112 + 8); // data directory 1 (PE32+: directories start at 112)
+  const table = [];
+  for (let i = 0; i < sections; i++) {
+    const h = opt + optSize + i * 40;
+    table.push({ va: b.readUInt32LE(h + 12), size: Math.max(b.readUInt32LE(h + 8), b.readUInt32LE(h + 16)), raw: b.readUInt32LE(h + 20) });
+  }
+  const off = (rva) => {
+    const s = table.find((x) => rva >= x.va && rva < x.va + x.size);
+    if (!s) throw new Error(`RVA ${rva.toString(16)} hiçbir bölümde değil`);
+    return rva - s.va + s.raw;
+  };
+  const cstr = (o) => b.toString('latin1', o, b.indexOf(0, o));
+  const out = [];
+  if (!importRva) return out;
+  for (let d = off(importRva); ; d += 20) {
+    const lookup = b.readUInt32LE(d) || b.readUInt32LE(d + 16); // OriginalFirstThunk, else FirstThunk
+    const name = b.readUInt32LE(d + 12);
+    if (!lookup && !name) break;
+    const functions = [];
+    for (let t = off(lookup); ; t += 8) {
+      const e = b.readBigUInt64LE(t);
+      if (e === 0n) break;
+      functions.push(e & 0x8000000000000000n ? `#${Number(e & 0xffffn)}` : cstr(off(Number(e & 0x7fffffffn)) + 2));
+    }
+    out.push({ dll: cstr(off(name)), functions });
+  }
+  return out;
+}
+
 const sha256 = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 const count = (file, needle) => { const b = readFileSync(file); let n = 0; let i = 0; const s = Buffer.from(needle); while ((i = b.indexOf(s, i)) >= 0) { n++; i += s.length; } return n; };
 const titles = (html) => [...html.matchAll(/<span class="title">([\s\S]*?)<\/span>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
@@ -149,12 +190,12 @@ export function ffmpegCodecs(dylib) {
 }
 
 async function officialZipEntry(spec, entry) {
-  const { cached } = await import(join(ROOT, 'tools', 'electron-artifacts.mjs'));
+  const { cached, extractZip } = await import(join(ROOT, 'tools', 'electron-artifacts.mjs'));
   const zip = cached(spec);
   if (!zip) return null;
   const work = mkdtempSync(join(tmpdir(), 'zeyvola-audit-'));
   try {
-    execFileSync('ditto', ['-x', '-k', zip, work]);
+    extractZip(zip, work);
     const p = join(work, entry);
     return existsSync(p) ? { sha256: sha256(p), bytes: statSync(p).size, zip } : null;
   } finally { rmSync(work, { recursive: true, force: true }); }
@@ -224,10 +265,10 @@ export async function audit(dir, profile, { probe = false, release = false } = {
     const exe = join(L.resources, 'bin', 'zeyvola-win.exe');
     const check = { present: existsSync(exe) };
     if (check.present) {
-      const p = execFileSync('objdump', ['-p', exe], { encoding: 'utf8' });
-      check.dlls = [...p.matchAll(/DLL Name: (\S+)/g)].map((m) => m[1]);
+      const imports = peImports(readFileSync(exe));
+      check.dlls = imports.map((i) => i.dll);
       check.notAllowed = check.dlls.filter((d) => !/^(kernel32|user32|shell32|ole32|dwmapi|mfplat|mfreadwrite)\.dll$/i.test(d));
-      check.functions = [...p.matchAll(/^\s+\d+\s+(\w+)\s*$/gm)].map((m) => m[1]);
+      check.functions = imports.flatMap((i) => i.functions);
       check.forbiddenFunctions = check.functions.filter((f) => /SinkWriter|Transcode|Encoder|KeyState|KeyboardState|RawInput|WH_KEYBOARD|socket|Internet|WinHttp/i.test(f));
       if (!check.functions.length) fails.push('Windows yardımcısının içe aktardığı işlevler okunamadı');
       if (check.notAllowed.length) fails.push(`Windows yardımcısı izin verilmeyen DLL'lere bağlı: ${check.notAllowed.join(', ')}`);

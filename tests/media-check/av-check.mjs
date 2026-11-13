@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Runs av-check.swift (AVFoundation, macOS's own decoders) on an exported video.
+// Opens an exported video with the operating system's own decoders, the way its own players see it:
+//   macOS:   av-check.swift (AVFoundation), compiled with swiftc (the project's toolchain) into a
+//            temporary folder, once per version of its source
+//   Windows: mf-check.ps1 (Media Foundation), run by the Windows PowerShell that comes with Windows
 //
 //   node tests/media-check/av-check.mjs <file> [--require h264-aac] [--duration <seconds>]
 //
 // The test suites call avCheck() through a test-only channel (main.ts, smoke:avCheck), so
-// `pnpm uitest` checks every exported MP4 this way. The probe is compiled with swiftc (the
-// project's toolchain) into a temporary folder, once per version of its source.
+// `pnpm uitest` checks every exported MP4 this way. Both probes report what they decoded; on
+// Windows the problems are worked out here, with the same rules as av-check.swift.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -28,15 +31,59 @@ export function buildAvCheck() {
   return bin;
 }
 
-/** @returns {{ ok: boolean, problems: string[], duration: number, video: object | null, audio: object | null }} */
+/** Problems of a decoded file, the rules of av-check.swift (used for the Windows probe's facts). */
+export function problemsOf(report, { require = 'h264-aac', duration } = {}) {
+  const problems = [];
+  if (report.error) problems.push(`sonda: ${report.error}`);
+  if (require === 'h264-aac') {
+    const v = report.video;
+    if (v) {
+      if (v.codec !== 'avc1') problems.push(`görüntü H.264 değil (${v.codec})`);
+      if (!v.decodedFrames) problems.push(`görüntü çözülemiyor${v.error ? `: ${v.error}` : ''}`);
+      else if ((v.spread ?? 0) < 0.02) problems.push('çözülen kareler boş (tek renk)');
+    } else {
+      problems.push('görüntü izi yok');
+    }
+    const a = report.audio;
+    if (a) {
+      if (a.codec !== 'aac ') problems.push(`ses AAC değil (${String(a.codec).trim()})`);
+      if (!(a.decodedSeconds > 0)) problems.push(`ses çözülemiyor${a.error ? `: ${a.error}` : ''}`);
+      else if ((a.peak ?? 0) < 0.001) problems.push('ses sessiz');
+    } else {
+      problems.push('ses izi yok');
+    }
+  }
+  if (duration != null && Math.abs((report.duration ?? 0) - duration) > 0.15) {
+    problems.push(`süre ${(report.duration ?? 0).toFixed(3)} sn, beklenen ${Number(duration).toFixed(3)} sn`);
+  }
+  return problems;
+}
+
+function mfCheck(file, opts) {
+  const ps1 = join(here, 'mf-check.ps1');
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1, '-File', resolve(file)], { encoding: 'utf8', timeout: 180_000, windowsHide: true });
+  const line = (r.stdout ?? '').trim().split(/\r?\n/).pop() ?? '';
+  let report;
+  try {
+    report = JSON.parse(line);
+  } catch {
+    return { ok: false, engine: 'Media Foundation', problems: [`sonda çıktı vermedi (${r.status ?? r.signal ?? r.error?.message}): ${(r.stderr ?? '').slice(0, 300)}`], duration: 0, video: null, audio: null };
+  }
+  const problems = problemsOf(report, opts);
+  return { ...report, video: report.video ?? null, audio: report.audio ?? null, engine: 'Media Foundation', problems, ok: problems.length === 0 };
+}
+
+/** @returns {{ ok: boolean, skipped?: boolean, engine?: string, problems: string[], duration: number, video: object | null, audio: object | null }} */
 export function avCheck(file, { require = 'h264-aac', duration } = {}) {
+  if (process.platform === 'win32') return mfCheck(file, { require, duration });
+  if (process.platform !== 'darwin') return { ok: false, skipped: true, problems: [`bu sistem için sonda yok (${process.platform})`], duration: 0, video: null, audio: null };
   const args = [resolve(file), ...(require ? ['--require', require] : []), ...(duration != null ? ['--duration', String(duration)] : [])];
   const r = spawnSync(buildAvCheck(), args, { encoding: 'utf8', timeout: 120_000 });
   const line = r.stdout.trim().split('\n').pop() ?? '';
   try {
-    return JSON.parse(line);
+    return { engine: 'AVFoundation', ...JSON.parse(line) };
   } catch {
-    return { ok: false, problems: [`sonda çıktı vermedi (${r.status ?? r.signal}): ${r.stderr.slice(0, 300)}`], duration: 0, video: null, audio: null };
+    return { ok: false, engine: 'AVFoundation', problems: [`sonda çıktı vermedi (${r.status ?? r.signal}): ${r.stderr.slice(0, 300)}`], duration: 0, video: null, audio: null };
   }
 }
 
@@ -47,6 +94,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
   const r = avCheck(file, { require: opt('--require') ?? 'h264-aac', duration: opt('--duration') != null ? Number(opt('--duration')) : undefined });
   console.log(JSON.stringify(r, null, 1));
-  console.log(r.ok ? '✓ AVFoundation: oynatılabilir (H.264 görüntü + AAC ses)' : `✗ AVFoundation: ${r.problems.join('; ')}`);
+  console.log(r.ok ? `✓ ${r.engine}: oynatılabilir (H.264 görüntü + AAC ses)` : `✗ ${r.engine ?? 'sonda'}: ${r.problems.join('; ')}`);
   process.exit(r.ok ? 0 : 1);
 }

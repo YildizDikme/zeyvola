@@ -161,6 +161,9 @@ export const key = (k: string, init: KeyboardEventInit = {}): void => { window.d
 
 // ─── Checking written files ───────────────────────────────────────────────────
 
+/** "exports/<file>" from the full path an export reports (either separator: Windows writes '\\'). */
+export const exportsRel = (full: string): string => { const p = full.replace(/\\/g, '/'); return p.slice(p.lastIndexOf('/exports/') + 1); };
+
 /** Project-relative path → URL of the media protocol. */
 export const mediaUrl = (mediaBase: string, rel: string): string => mediaBase + rel.split('/').map(encodeURIComponent).join('/');
 

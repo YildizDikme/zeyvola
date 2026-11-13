@@ -6,17 +6,22 @@
  *   automatic zoom (clear, generate) → export (finish one, pick another folder, cancel one) →
  *   back to the list
  *
- * Every exported MP4 is also opened with macOS's own decoders (AVFoundation, tests/media-check),
- * the way QuickTime sees it: Chromium plays VP9-in-MP4 happily, QuickTime shows no picture.
+ * Every exported MP4 is also opened with the operating system's own decoders (tests/media-check:
+ * AVFoundation on macOS, Media Foundation on Windows), the way QuickTime or the Windows player sees
+ * it: Chromium plays VP9-in-MP4 happily, QuickTime shows no picture. The packaged app's Chromium has
+ * no AAC (or, without a GPU, H.264) decoder, so an MP4's picture and sound are judged by that probe.
+ * A device without an H.264 hardware encoder cannot write MP4 at all: the export window must say so
+ * before anything starts and offer WebM; the test checks that and goes on with WebM.
  *
  * The editor's state is only read, to check what each click did. `pnpm smoke` stays the test of
  * the parts (compositor, privacy, codecs, timeline gestures); this one checks that the parts
  * work together from the first screen to the exported file.
  */
-import { sequenceDuration } from '@zeyvola/project-model';
+import { parseProject, sequenceDuration } from '@zeyvola/project-model';
 import { TICKS_PER_SECOND } from '@zeyvola/timing';
 import { Mp4Writer } from '@zeyvola/media-web';
 import { PROFILE, DIST } from '../../shared/distribution';
+import { api } from '../api';
 import { t } from '../i18n';
 import { recordLikeBrowser } from '../smoke-fixtures';
 import {
@@ -147,17 +152,24 @@ export async function runUiTest(): Promise<unknown> {
   });
 
   const expected = () => sequenceDuration(store.project) / TICKS_PER_SECOND;
-  const ext = PROFILE.defaultExport;
+  let ext: 'mp4' | 'webm' = PROFILE.defaultExport;
+  /** Set when this device cannot write MP4 (no H.264 hardware encoder): the window's message. */
+  let mp4Unavailable: string | null = null;
   const exportedUrl = (n = 1) => mediaUrl(fileBase(), `exports/Arayüz testi 16x9${n > 1 ? ` (${n})` : ''}.${ext}`);
-  /** macOS's own decoders on an MP4 (WebM is not a QuickTime format; Chromium checks those). */
-  const systemCheck = async (path: string): Promise<string> => {
-    if (ext !== 'mp4') return 'WebM: sistem sondası yok';
+  /** The system's own decoders on an MP4 (WebM is not a QuickTime format; Chromium checks those). */
+  const systemProbe = async (path: string): Promise<AvCheck | null> => {
+    if (ext !== 'mp4') return null;
     const r = await invoke<AvCheck>('smoke:avCheck', { path, duration: expected() });
-    if (r.skipped) return 'sistem sondası yalnızca macOS';
-    expect(r.ok, `AVFoundation: ${r.problems.join('; ')}`);
-    return `AVFoundation: ${r.video?.codec} ${r.video?.decodedFrames} kare çözüldü, ${r.audio?.codec.trim()} ${r.audio?.decodedSeconds?.toFixed(2)} sn`;
+    if (r.skipped) return null;
+    expect(r.ok, `${r.engine ?? 'sistem sondası'}: ${r.problems.join('; ')}`);
+    return r;
   };
-  const donePath = (): string => q('.export-done span')?.getAttribute('title') ?? '';
+  const describe = (r: AvCheck | null): string => (r
+    ? `${r.engine}: ${r.video?.codec} ${r.video?.decodedFrames} kare çözüldü, ${r.audio?.codec.trim()} ${r.audio?.decodedSeconds?.toFixed(2)} sn`
+    : ext === 'mp4' ? 'sistem sondası yok' : 'WebM: sistem sondası yok');
+  const systemCheck = async (path: string): Promise<string> => describe(await systemProbe(path));
+  // Shown with the system's separators; compared with '/' (Windows writes '\').
+  const donePath = (): string => (q('.export-done span')?.getAttribute('title') ?? '').replace(/\\/g, '/');
 
   await step(`Dışa aktarma: pencereden ${ext.toUpperCase()} 1080p30 dosyası alınır ve oynatılabilir`, async () => {
     await until(() => store.getState().save === 'saved', 5000);
@@ -166,14 +178,38 @@ export async function runUiTest(): Promise<unknown> {
     expect(dialog, 'dışa aktarma penceresi açılmadı');
     click(option(t("Kare hızı"), t("30 fps"), dialog!), '30 fps');
     await frame();
-    click(button(t("Dışa aktar"), q('.export-modal footer')!), 'penceredeki Dışa aktar');
+    // The window asks the device first: either the export can start, or it says why not.
+    const footer = () => q('.export-modal footer')!;
+    const decided = await until(() => q('.export-unsupported', dialog!) ?? button(t("Dışa aktar"), footer()), 10_000);
+    expect(decided, 'pencere biçimin desteklenip desteklenmediğini söylemedi');
+    if (decided!.classList.contains('export-unsupported')) {
+      expect(ext === 'mp4', `${ext.toUpperCase()} için kodlayıcı yok: ${text(decided)}`);
+      mp4Unavailable = text(decided);
+      const disabled = all<HTMLButtonElement>('button', footer()).find((b) => text(b) === t("Dışa aktar"));
+      expect(disabled?.disabled, 'kodlayıcı yokken "Dışa aktar" düğmesi basılabilir');
+      expect(/H\.264/.test(mp4Unavailable), `uyarı H.264 kodlayıcısından söz etmiyor: "${mp4Unavailable}"`);
+      click(button(t("WebM’e geç"), decided!), '"WebM’e geç" düğmesi');
+      ext = 'webm';
+      expect(await until(() => text(q('.export-target-text strong')).endsWith('.webm'), 3000), 'WebM’e geçince kayıt yeri adı değişmedi');
+      await until(() => button(t("Dışa aktar"), footer()), 10_000);
+    }
+    click(button(t("Dışa aktar"), footer()), 'penceredeki Dışa aktar');
     expect(await until(() => q('.export-progress .bar') || q('.export-done') || q('.export-progress .is-error'), 10_000, 20), 'ilerleme çubuğu görünmedi');
     const end = await until(() => q('.export-done') ?? q('.export-progress .is-error'), 150_000, 50);
     expect(end, 'dışa aktarma 150 sn içinde bitmedi');
     expect(end!.classList.contains('export-done'), `hata: ${text(end)}`);
     expect(button(t("Klasörde göster"), dialog!), '"Klasörde göster" düğmesi yok');
-    const file = await probeVideo(exportedUrl(), expected() / 2);
-    expect(file.ok, 'dışa aktarılan dosya açılamadı');
+    const done = text(q('.export-done span'));
+    expect(/MB/.test(done), `bitiş satırında dosya boyutu yok: "${done}"`);
+    expect(donePath().endsWith(`/exports/Arayüz testi 16x9.${ext}`), `dosya yolu: "${donePath()}"`);
+    // An MP4 is judged by the system's decoders; Chromium's view is reported next to it. A WebM
+    // (or an MP4 on a system without a probe) is judged by Chromium.
+    const system = await systemProbe(donePath());
+    const chromium = await probeVideo(exportedUrl(), expected() / 2);
+    const file = system
+      ? { duration: system.duration, width: Math.round(system.video?.width ?? 0), height: Math.round(system.video?.height ?? 0), spread: system.video?.spread ?? 0 }
+      : chromium;
+    if (!system) expect(chromium.ok, 'dışa aktarılan dosya açılamadı');
     // Never shorter than the timeline by more than one frame (1/30 s). Longer by at most 0.12 s:
     // the Opus encoder pads the last packets and the writers do not trim that tail (about 0.09 s
     // measured), so the file reads a little longer than the picture.
@@ -181,16 +217,20 @@ export async function runUiTest(): Promise<unknown> {
     expect(diff > -1 / 30 && diff < 0.12, `dosya ${file.duration.toFixed(3)} sn, zaman çizelgesi ${expected().toFixed(3)} sn`);
     expect(file.width === 1920 && file.height === 1080, `boyut ${file.width}×${file.height}`);
     expect(file.spread > 0.02, `ortadaki kare tek renk (parlaklık yayılımı ${file.spread.toFixed(3)})`);
-    const sound = await decodeSound(exportedUrl()).catch((e: Error) => { throw new Error(`ses çözülemedi: ${e.message}`); });
-    expect(sound.duration > expected() - 0.05 && sound.duration < expected() + 0.12, `ses ${sound.duration.toFixed(2)} sn, zaman çizelgesi ${expected().toFixed(2)} sn`);
-    expect(peak(sound) > 0.01, `ses sessiz (tepe ${peak(sound).toFixed(4)})`);
-    const done = text(q('.export-done span'));
-    expect(/MB/.test(done), `bitiş satırında dosya boyutu yok: "${done}"`);
-    expect(donePath().endsWith(`/exports/Arayüz testi 16x9.${ext}`), `dosya yolu: "${donePath()}"`);
-    const system = await systemCheck(donePath());
+    let soundSeconds: number;
+    if (system) {
+      soundSeconds = system.audio?.decodedSeconds ?? 0;
+      expect((system.audio?.peak ?? 0) > 0.01, `ses sessiz (tepe ${(system.audio?.peak ?? 0).toFixed(4)})`);
+    } else {
+      const sound = await decodeSound(exportedUrl()).catch((e: Error) => { throw new Error(`ses çözülemedi: ${e.message}`); });
+      soundSeconds = sound.duration;
+      expect(peak(sound) > 0.01, `ses sessiz (tepe ${peak(sound).toFixed(4)})`);
+    }
+    expect(soundSeconds > expected() - 0.05 && soundSeconds < expected() + 0.12, `ses ${soundSeconds.toFixed(2)} sn, zaman çizelgesi ${expected().toFixed(2)} sn`);
     const shot = await screenshot('disa-aktarma-bitti', 200);
     if (shot) shots.push(shot);
-    return `${done}, ${file.duration.toFixed(2)} sn (çizelge ${expected().toFixed(2)}), ${file.width}×${file.height}, ses ${sound.duration.toFixed(2)} sn · ${system}`;
+    const viewer = system ? ` · Chromium ${chromium.ok ? `da açtı (${chromium.width}×${chromium.height})` : 'açamadı (bu pakette çözücüsü yok)'}` : '';
+    return `${done}, ${file.duration.toFixed(2)} sn (çizelge ${expected().toFixed(2)}), ${file.width}×${file.height}, ses ${soundSeconds.toFixed(2)} sn · ${describe(system)}${viewer}${mp4Unavailable ? ` · MP4 yazılamadı, uyarı: "${mp4Unavailable}"` : ''}`;
   });
 
   // Test runs never open the system save dialog: "Değiştir…" picks a temporary folder outside
@@ -253,26 +293,39 @@ export async function runUiTest(): Promise<unknown> {
   });
 
   await step('Sistem sondası kendini kanıtlar: eski sürümün VP9 + Opus\'lu MP4\'ünde "görüntü çözülemiyor" der', async () => {
-    if (ext !== 'mp4') return 'WebM dağıtımı: atlandı';
+    if (PROFILE.defaultExport !== 'mp4') return 'WebM dağıtımı: atlandı';
     // What the published build wrote as "MP4" until 2026-11-13 (vp09 + Opus boxes).
     await invoke('smoke:writeFile', { projectId: sample.id, path: 'exports/eski-vp9.mp4', data: await oldStyleMp4() });
     const r = await invoke<AvCheck>('smoke:avCheck', { projectId: sample.id, path: 'exports/eski-vp9.mp4' });
-    if (r.skipped) return 'yalnızca macOS';
+    if (r.skipped) return `sistem sondası yok: ${r.problems.join('; ')}`;
     expect(!r.ok, 'sonda VP9\'lu MP4\'ü kabul etti');
     expect(r.problems.some((p) => p.startsWith('görüntü çözülemiyor')), `sorunlar: ${r.problems.join('; ')}`);
     expect(r.problems.some((p) => p.startsWith('ses AAC değil')), `sorunlar: ${r.problems.join('; ')}`);
-    return r.problems.join('; ');
+    return `${r.engine}: ${r.problems.join('; ')}`;
   });
 
-  return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST };
+  // Only when asked (CI on Windows): macOS needs the screen recording permission, which a test
+  // run never asks for.
+  let realCapture: RealCapture | null = null;
+  if ((await invoke<{ realCapture: boolean }>('smoke:realRecording', { op: 'env' })).realCapture) {
+    await step('Gerçek ekran kaydı (Chromium yolu): birkaç saniyelik kayıt dosyaları yazılır, görüntü boş değil, tıklamalar imleç günlüğünde', async () => {
+      realCapture = await recordScreen(shots);
+      return realCapture.summary;
+    });
+  }
+
+  return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST, ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
 }
 
 interface AvCheck {
   ok: boolean;
   skipped?: boolean;
+  /** AVFoundation (macOS) or Media Foundation (Windows). */
+  engine?: string;
   problems: string[];
-  video: { codec: string; decodedFrames: number } | null;
-  audio: { codec: string; decodedSeconds?: number } | null;
+  duration: number;
+  video: { codec: string; decodedFrames: number; width?: number; height?: number; spread?: number } | null;
+  audio: { codec: string; decodedSeconds?: number; peak?: number } | null;
 }
 
 /** One second of VP9 + Opus in MP4, as the published build wrote "MP4" before 2026-11-13. */
@@ -324,4 +377,124 @@ async function oldStyleMp4(): Promise<Uint8Array> {
   pos = 0;
   for (const x of parts) { const at = x.p ?? pos; out.set(x.d, at); if (x.p === null) pos += x.d.length; }
   return out;
+}
+
+interface RealCapture {
+  summary: string;
+  backend: string | null;
+  clicksCapability: boolean;
+  seconds: number;
+  screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean } | null;
+  mic: { duration: number; peak: number } | null;
+  cursor: { moves: number; downs: number; buttons: string };
+  driver: { clicks: number; matched: number; worstOffset: number } | null;
+}
+
+/**
+ * Records the main display for about six seconds through the Chromium path (backend "web"), as
+ * the recording screen does, with the synthetic microphone. An outside driver
+ * (tests/real-capture-web/windows-clicks.ps1) clicks while the "recording" marker exists; its
+ * clicks must come back in the cursor log at the same place. A black or empty picture fails.
+ */
+async function recordScreen(shots: string[]): Promise<RealCapture> {
+  const expect = (cond: unknown, message: string): void => { if (!cond) throw new Error(message); };
+  const backends = await api.backends();
+  const web = backends.find((b) => b.id === 'web');
+  const display = (await api.sources()).find((s) => s.kind === 'display');
+  expect(display, 'kaydedilecek ekran listede yok');
+  const mic = (await navigator.mediaDevices.enumerateDevices()).find((d) => d.kind === 'audioinput');
+  await api.startCapture({
+    projectName: 'Gerçek kayıt', target: { kind: 'display', sourceId: display!.id, displayId: display!.displayId, label: display!.name },
+    cameraDeviceId: null, cameraLabel: null, micDeviceId: mic?.deviceId ?? null, micLabel: mic?.label ?? null,
+    systemAudio: false, fps: 30, quality: 'standard', countdown: 0, backend: 'web',
+  });
+  const recording = await untilAsync(async () => (await api.captureState()).phase === 'recording', 30_000);
+  const state = await api.captureState();
+  expect(recording, `kayıt başlamadı: ${state.phase}${state.message ? ` (${state.message})` : ''}`);
+  await invoke('smoke:realRecording', { op: 'signal', name: 'recording' });
+  const seconds = 6;
+  await sleep(seconds * 1000);
+  await invoke('smoke:realRecording', { op: 'signal', name: 'stopped' });
+  const result = await api.stopCapture();
+  expect(result, 'kayıt durdurulunca sonuç gelmedi');
+  const opened = await api.openProject(result!.projectId);
+  const project = parseProject(opened.json);
+  const rec = project.recordings[result!.recordingId];
+  expect(rec, 'kayıt projede yok');
+  const url = (rel: string) => mediaUrl(opened.mediaBase, rel);
+
+  let screen: RealCapture['screen'] = null;
+  const src = rec!.sources.screen;
+  if (src) {
+    const kept = await invoke<string>('smoke:realRecording', { op: 'keep', projectId: project.id, path: src.file, as: `gercek-kayit-ekran.${src.file.split('.').pop()}` });
+    shots.push(kept);
+    const v = await probeVideo(url(src.file), 2.5);
+    screen = { width: v.width, height: v.height, duration: v.duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01) };
+  }
+  let micInfo: RealCapture['mic'] = null;
+  if (rec!.sources.mic) {
+    const sound = await decodeSound(url(rec!.sources.mic.file)).catch(() => null);
+    micInfo = sound ? { duration: sound.duration, peak: peak(sound) } : { duration: 0, peak: 0 };
+  }
+  const log = rec!.cursorFile ? await fetch(url(rec!.cursorFile)).then((r) => r.text()) : '';
+  const events = log.split('\n').filter(Boolean).map((l) => JSON.parse(l) as { e: string; x: number; y: number; b?: string });
+  const downs = events.filter((e) => e.e === 'd');
+  const cursor = { moves: events.filter((e) => e.e === 'm').length, downs: downs.length, buttons: downs.map((d) => d.b).join('') };
+  // The driver's own log: where it clicked, as fractions of the primary display.
+  const driverLog = await untilAsync(() => invoke<string | null>('smoke:realRecording', { op: 'readSignal', name: 'clicks.json' }), 8000);
+  let driver: RealCapture['driver'] = null;
+  if (driverLog) {
+    const clicks = (JSON.parse(driverLog) as { clicks: { fx: number; fy: number; button: string }[] }).clicks;
+    let matched = 0;
+    let worst = 0;
+    for (const c of clicks) {
+      const best = downs.filter((d) => d.b === c.button).map((d) => Math.hypot(d.x - c.fx, d.y - c.fy)).sort((a, b) => a - b)[0];
+      if (best !== undefined && best < 0.01) matched++;
+      worst = Math.max(worst, best ?? 1);
+    }
+    driver = { clicks: clicks.length, matched, worstOffset: Math.round(worst * 1e4) / 1e4 };
+  }
+  const shot = await screenshot('gercek-kayit-sonrasi', 500);
+  if (shot) shots.push(shot);
+  const summary = [
+    `arka uç ${rec!.capture.backend}, tıklama yardımcısı ${web?.capabilities.clicks ? 'var' : 'yok'}`,
+    screen ? `ekran ${screen.width}×${screen.height}, ${screen.duration.toFixed(2)} sn, ${screen.frames} kare, yayılım ${screen.spread.toFixed(3)}${screen.black ? ' (SİYAH/BOŞ)' : ''}` : 'ekran dosyası yok',
+    micInfo ? `mikrofon ${micInfo.duration.toFixed(2)} sn, tepe ${micInfo.peak.toFixed(3)}` : 'mikrofon yok',
+    `imleç ${cursor.moves} konum, ${cursor.downs} tıklama (${cursor.buttons || '-'})`,
+    driver ? `sürücü ${driver.clicks} tıklama, ${driver.matched} eşleşti (en büyük sapma ${driver.worstOffset})` : 'tıklama sürücüsü günlüğü yok',
+  ].join(' · ');
+  const out: RealCapture = { summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, mic: micInfo, cursor, driver };
+  expect(screen, `ekran dosyası yok · ${summary}`);
+  expect(Math.abs(screen!.duration - seconds) < 1.5, `ekran videosu ${screen!.duration.toFixed(2)} sn, beklenen ~${seconds} sn · ${summary}`);
+  expect(screen!.frames >= seconds * 5, `ekran videosunda ${screen!.frames} kare · ${summary}`);
+  expect(!screen!.black, `ekran kaydı siyah ya da tek renk · ${summary}`);
+  expect(cursor.moves > 0, `imleç günlüğü boş · ${summary}`);
+  if (driver && web?.capabilities.clicks) expect(driver.matched === driver.clicks, `tıklamalar imleç günlüğünde eksik ya da yanlış yerde · ${summary}`);
+  return out;
+}
+
+/** `until` for a check that has to ask the main process. */
+async function untilAsync<T>(fn: () => Promise<T | null | undefined | false>, ms: number): Promise<T | null> {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) {
+    const v = await fn();
+    if (v) return v;
+    await sleep(200);
+  }
+  return null;
+}
+
+/** Frames a video shows when played through once (requestVideoFrameCallback). */
+async function countFrames(src: string): Promise<number> {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.src = src;
+  let frames = 0;
+  const tick = (_n: number, m: VideoFrameCallbackMetadata) => { frames = Math.max(frames, m.presentedFrames); if (!v.ended) v.requestVideoFrameCallback(tick); };
+  v.requestVideoFrameCallback(tick);
+  await v.play().catch(() => undefined);
+  await new Promise<void>((res) => { v.onended = () => res(); v.onerror = () => res(); setTimeout(res, 20_000); });
+  v.removeAttribute('src');
+  v.load();
+  return frames;
 }

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerSaveBlocker, shell, Tray, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions,
@@ -347,17 +347,22 @@ function registerIpc(): void {
   // Test-only channels: registered exclusively in --smoke mode (temporary projects folder).
   if (SMOKE) {
     const shotsDir = process.env.ZEYVOLA_SHOTS_DIR ?? join(store.root, 'shots');
-    // Exported files are checked with macOS's own decoders (tests/media-check), not Chromium's.
-    // Paths are limited to the test's temporary folder.
+    // Exported files are checked with the operating system's own decoders (tests/media-check:
+    // AVFoundation on macOS, Media Foundation on Windows), not Chromium's. The probe is outside the
+    // package; run-suite.mjs passes its path (ZEYVOLA_MEDIA_CHECK). Paths are limited to the test's
+    // temporary folders.
     const testPath = (p: { projectId?: string; path: string }): string => {
       const full = p.projectId ? store.resolve(p.projectId, p.path) : resolve(p.path);
       const roots = [store.root, ...(chosenTestDir ? [chosenTestDir] : [])];
-      if (!roots.some((r) => full.startsWith(r + '/'))) throw new Error('test path outside the test folders');
+      // relative(), not a '/' prefix: Windows paths use backslashes.
+      const inside = (r: string) => { const rel = relative(r, full); return !!rel && !rel.startsWith('..') && !isAbsolute(rel); };
+      if (!roots.some(inside)) throw new Error('test path outside the test folders');
       return full;
     };
     ipcMain.handle('smoke:avCheck', async (_e, p: { projectId?: string; path: string; require?: string; duration?: number }) => {
-      if (process.platform !== 'darwin') return { ok: false, skipped: true, problems: ['yalnızca macOS'] };
-      const mod = (await import(pathToFileURL(resolve(app.getAppPath(), '..', '..', 'tests', 'media-check', 'av-check.mjs')).href)) as {
+      const probe = process.env.ZEYVOLA_MEDIA_CHECK ?? resolve(app.getAppPath(), '..', '..', 'tests', 'media-check', 'av-check.mjs');
+      if (!(await exists(probe))) return { ok: false, skipped: true, problems: ['sistem sondası bulunamadı (ZEYVOLA_MEDIA_CHECK)'] };
+      const mod = (await import(pathToFileURL(probe).href)) as {
         avCheck: (file: string, o: { require?: string; duration?: number }) => unknown;
       };
       return mod.avCheck(testPath(p), { require: p.require ?? 'h264-aac', duration: p.duration });
@@ -384,7 +389,8 @@ function registerIpc(): void {
     });
     // A real recording (native helper: tests/real-capture; browser path: tests/real-capture-web), copied
     // into the temporary project: ZEYVOLA_REAL_RECORDING_DIR holds its files and recording.json.
-    ipcMain.handle('smoke:realRecording', async (_e, p: { projectId: string }) => {
+    ipcMain.handle('smoke:realRecording', async (_e, p: { projectId: string } | RealCaptureOp) => {
+      if ('op' in p) return realCaptureOp(p);
       const dir = process.env.ZEYVOLA_REAL_RECORDING_DIR;
       if (!dir) return null;
       const meta = JSON.parse(await readFile(join(dir, 'recording.json'), 'utf8')) as Omit<Recording, 'id' | 'createdAt' | 'duration' | 'syncOffsets'> & { durationTicks: number };
@@ -406,6 +412,35 @@ function registerIpc(): void {
       await store.appendRecording(p.projectId, recording);
       return { recordingId, duration: meta.durationTicks };
     });
+    // Real screen recording inside a test run (CI on Windows: tests/real-capture-web/windows-clicks.ps1).
+    // ZEYVOLA_TEST_REAL_CAPTURE=1 asks the interface test to record the screen for a few seconds;
+    // ZEYVOLA_TEST_SIGNAL_DIR is a folder shared with the outside click driver: the test leaves
+    // small marker files there ("recording", "stopped") and reads the driver's click log back.
+    // These go through smoke:realRecording (op), the preload's existing channel for real recordings.
+    const signalDir = process.env.ZEYVOLA_TEST_SIGNAL_DIR ?? null;
+    const signalName = (n: unknown): string => {
+      if (typeof n !== 'string' || !/^[a-z0-9-]{1,40}(\.json)?$/.test(n)) throw new Error('bad signal name');
+      return n;
+    };
+    type RealCaptureOp =
+      | { op: 'env' }
+      | { op: 'signal' | 'readSignal'; name: string }
+      | { op: 'keep'; projectId: string; path: string; as: string };
+    const realCaptureOp = async (p: RealCaptureOp): Promise<unknown> => {
+      if (p.op === 'env') return { realCapture: process.env.ZEYVOLA_TEST_REAL_CAPTURE === '1', signals: !!signalDir };
+      if (p.op === 'signal') {
+        if (!signalDir) return false;
+        await writeFile(join(signalDir, signalName(p.name)), `${Date.now()}\n`);
+        return true;
+      }
+      if (p.op === 'readSignal') return signalDir ? readFile(join(signalDir, signalName(p.name)), 'utf8').catch(() => null) : null;
+      if (p.op !== 'keep') throw new Error('unknown op');
+      // keep: copies a file of a (temporary) project next to the screenshots, for CI artifacts.
+      await mkdir(shotsDir, { recursive: true });
+      const dest = join(shotsDir, basename(p.as.replace(/[^\w.-]/g, '')));
+      await copyFile(store.resolve(p.projectId, p.path), dest);
+      return dest;
+    };
     // CPU seconds used so far by every process of the app (main, GPU, renderers, utilities).
     ipcMain.handle('smoke:cpu', (): CpuSample => {
       const byType: Record<string, number> = {};

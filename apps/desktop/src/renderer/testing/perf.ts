@@ -18,7 +18,7 @@ import { probe } from '../perf-probe';
 import { regenerateZoomSuggestions } from '../screens/editor/zoom-actions';
 import { recordLikeBrowser, synthesizeRecording } from '../smoke-fixtures';
 import { api } from '../api';
-import { cpuNow, cpuPercent, createSampleProject, frame, invoke, openInEditor, sleep, stats, until, type Check, type OpenEditor, type SampleProject } from './harness';
+import { cpuNow, cpuPercent, createSampleProject, exportsRel, frame, invoke, openInEditor, sleep, stats, until, type Check, type OpenEditor, type SampleProject } from './harness';
 
 /** One measured number. `better` says which direction is an improvement, for comparisons. */
 export interface Metric { name: string; value: number; unit: string; better?: 'lower' | 'higher' }
@@ -235,7 +235,7 @@ async function exportScenario(ed: OpenEditor, label: string, o: Pick<ExportOptio
   // The written file must open and have the timeline's length.
   let played = Number.NaN;
   if (result.phase === 'done' && result.path) {
-    const rel = result.path.slice(result.path.indexOf('/exports/') + 1);
+    const rel = exportsRel(result.path);
     const v = document.createElement('video');
     v.muted = true;
     v.src = store.getState().mediaBase + rel.split('/').map(encodeURIComponent).join('/');

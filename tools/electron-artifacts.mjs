@@ -7,10 +7,11 @@
 //   node tools/electron-artifacts.mjs --print ffmpeg:darwin:arm64      (path only if cached; no download)
 //
 // Printed as JSON: { "<spec>": "<zip path>" }.
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +41,29 @@ export function cached(spec) {
   if (!existsSync(base)) return null;
   for (const d of readdirSync(base)) if (existsSync(join(base, d, file))) return join(base, d, file);
   return null;
+}
+
+/**
+ * The host's own zip tool, so packaging needs nothing installed: macOS ditto (keeps the framework
+ * symlinks and signatures of a .app), Windows' bsdtar (System32\tar.exe, part of Windows 10 1803+;
+ * named by full path because Git's GNU tar, earlier on PATH on CI runners, cannot read zip files),
+ * elsewhere unzip / zip.
+ */
+function systemTar() {
+  return join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+}
+
+export function extractZip(zip, dest) {
+  if (process.platform === 'darwin') execFileSync('ditto', ['-x', '-k', zip, dest], { stdio: 'inherit' });
+  else if (process.platform === 'win32') execFileSync(systemTar(), ['-x', '-f', zip, '-C', dest], { stdio: 'inherit' });
+  else execFileSync('unzip', ['-q', zip, '-d', dest], { stdio: 'inherit' });
+}
+
+/** Zips `folder` itself (the archive's top entry is the folder's name). No __MACOSX entries. */
+export function createZip(folder, zip) {
+  if (process.platform === 'darwin') execFileSync('ditto', ['-c', '-k', '--norsrc', '--noextattr', '--noqtn', '--keepParent', folder, zip], { stdio: 'inherit' });
+  else if (process.platform === 'win32') execFileSync(systemTar(), ['-a', '-c', '-f', zip, '-C', dirname(folder), basename(folder)], { stdio: 'inherit' });
+  else execFileSync('zip', ['-q', '-r', '-y', zip, basename(folder)], { cwd: dirname(folder), stdio: 'inherit' });
 }
 
 /** spec: "<artifact>:<platform>:<arch>" (artifact: electron | ffmpeg) or "SHASUMS256.txt". */

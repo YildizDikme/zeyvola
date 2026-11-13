@@ -1,0 +1,192 @@
+name: Windows
+
+# Windows test on GitHub's windows-latest runner (Windows Server, no graphics card). Separate from
+# ci.yml (macOS) so neither starts the other: this one runs only on pushes to ci/windows* branches
+# or by hand (Actions → Windows → Run workflow, once this file is on the default branch).
+# One run collects as much as it can: every test step continues on failure, records its outcome,
+# and the last step decides the job's result. Everything is uploaded as the "windows-test" artifact.
+on:
+  push:
+    branches: ['ci/windows**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      ZEYVOLA_DIST: mp4
+      OUT: ${{ github.workspace }}\out-ci
+      # Electron's download cache (electron/install.js, tools/electron-artifacts.mjs), outside the checkout.
+      electron_config_cache: ${{ github.workspace }}\..\electron-cache
+      # 'false' skips the packaged-app steps (package.mjs on Windows needs zig for zeyvola-win.exe).
+      PACKAGED: 'true'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Before anything is installed: what this Windows has (Media Foundation, GPU, session, screen).
+      # Also compiles tests/media-check/mf-check.ps1 first, so a mistake there shows in the first minute.
+      - name: Ortam dökümü / environment dump
+        id: env
+        continue-on-error: true
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-env/env-dump.ps1 -Out "$env:OUT\env"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      # Electron 44 downloads its binary on first use (no install script); installed here from a
+      # cache kept between runs. The same folder holds package.mjs's Electron and FFmpeg zips and
+      # the Zig archive (zig\).
+      - name: Electron önbelleği / Electron cache
+        id: electron-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.electron_config_cache }}
+          key: electron-zig-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tools/zig-fetch.mjs') }}
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron ikilisi / Electron binary
+        run: pnpm --filter @zeyvola/desktop exec node node_modules/electron/install.js
+
+      # Zig 0.17.0 (MIT, build tool only) for zeyvola-win.exe, the same tool the released helper is
+      # built with: official ziglang.org archive, SHA-256 pinned in tools/zig-fetch.mjs (fails on mismatch).
+      - name: Zig
+        id: zig
+        if: env.PACKAGED == 'true'
+        continue-on-error: true
+        env:
+          ZEYVOLA_ZIG_CACHE: ${{ env.electron_config_cache }}\zig
+        run: node tools/zig-fetch.mjs
+
+      - name: Tür denetimi / typecheck
+        id: typecheck
+        continue-on-error: true
+        run: pnpm typecheck
+
+      - name: Birim testleri / unit tests
+        id: unit
+        continue-on-error: true
+        run: pnpm test
+
+      # Development Electron (official build, with its own codecs). Builds the app first.
+      - name: Duman testi (geliştirme) / smoke (development Electron)
+        id: dev_smoke
+        continue-on-error: true
+        run: node apps/desktop/scripts/run-suite.mjs smoke --out "$env:OUT\dev" --timeout 15
+
+      # The interface test, ending with a real screen recording through Chromium while
+      # windows-clicks.ps1 clicks on the desktop.
+      - name: Arayüz testi + gerçek kayıt (geliştirme) / uitest + real capture (development)
+        id: dev_ui
+        continue-on-error: true
+        run: |
+          $sig = Join-Path $env:RUNNER_TEMP 'zeyvola-signals-dev'
+          New-Item -ItemType Directory -Force -Path $sig | Out-Null
+          $clicker = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/real-capture-web/windows-clicks.ps1', '-SignalDir', $sig)
+          $env:ZEYVOLA_TEST_REAL_CAPTURE = '1'
+          $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
+          node apps/desktop/scripts/run-suite.mjs ui --no-build --out "$env:OUT\dev" --timeout 15
+          $code = $LASTEXITCODE
+          Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
+          Copy-Item (Join-Path $sig 'clicks.json') "$env:OUT\dev\uitest-clicks.json" -ErrorAction SilentlyContinue
+          exit $code
+
+      # Microsoft d3dcompiler_47.dll terms on first start (the development electron.exe ships the DLL too).
+      - name: Şartlar ekranı (geliştirme) / terms flow (development)
+        id: dev_terms
+        continue-on-error: true
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/node_modules/electron/dist/electron.exe -AppArg "$env:GITHUB_WORKSPACE\apps\desktop" -Out "$env:OUT\dev-terms"
+
+      # ─── Packaged app (Zeyvola.exe), once packaging works on Windows ───
+      - name: Windows paketi / package
+        id: package
+        if: env.PACKAGED == 'true' && steps.zig.outcome == 'success'
+        continue-on-error: true
+        run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64 --experimental-windows --skip-build
+
+      # Saved after packaging, so the Windows Electron/FFmpeg zips are kept too, even when a later step fails.
+      - name: Electron önbelleğini kaydet / save Electron cache
+        if: always() && steps.electron-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.electron_config_cache }}
+          key: electron-zig-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tools/zig-fetch.mjs') }}
+
+      - name: Duman testi (paket) / smoke (packaged)
+        id: pkg_smoke
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: node apps/desktop/scripts/run-suite.mjs smoke --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 15
+
+      - name: Arayüz testi + gerçek kayıt (paket) / uitest + real capture (packaged)
+        id: pkg_ui
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: |
+          $sig = Join-Path $env:RUNNER_TEMP 'zeyvola-signals-pkg'
+          New-Item -ItemType Directory -Force -Path $sig | Out-Null
+          $clicker = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/real-capture-web/windows-clicks.ps1', '-SignalDir', $sig)
+          $env:ZEYVOLA_TEST_REAL_CAPTURE = '1'
+          $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
+          node apps/desktop/scripts/run-suite.mjs ui --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 15
+          $code = $LASTEXITCODE
+          Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
+          Copy-Item (Join-Path $sig 'clicks.json') "$env:OUT\packaged\uitest-clicks.json" -ErrorAction SilentlyContinue
+          exit $code
+
+      - name: Şartlar ekranı (paket) / terms flow (packaged)
+        id: pkg_terms
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/out/mp4/win32-x64/Zeyvola.exe -Out "$env:OUT\packaged-terms"
+
+      - name: Sonuçları yükle / upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test
+          path: out-ci
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Sonuç / verdict
+        if: always()
+        env:
+          OUTCOMES: >-
+            env=${{ steps.env.outcome }}
+            typecheck=${{ steps.typecheck.outcome }}
+            unit=${{ steps.unit.outcome }}
+            dev_smoke=${{ steps.dev_smoke.outcome }}
+            dev_ui=${{ steps.dev_ui.outcome }}
+            dev_terms=${{ steps.dev_terms.outcome }}
+            zig=${{ steps.zig.outcome }}
+            package=${{ steps.package.outcome }}
+            pkg_smoke=${{ steps.pkg_smoke.outcome }}
+            pkg_ui=${{ steps.pkg_ui.outcome }}
+            pkg_terms=${{ steps.pkg_terms.outcome }}
+        run: |
+          $failed = @()
+          foreach ($pair in ($env:OUTCOMES -split '\s+')) {
+            $name, $outcome = $pair -split '='
+            Write-Host ("{0,-10} {1}" -f $name, $(if ($outcome) { $outcome } else { '-' }))
+            if ($outcome -eq 'failure') { $failed += $name }
+          }
+          if ($failed.Count) { Write-Host "Başarısız: $($failed -join ', ')"; exit 1 }

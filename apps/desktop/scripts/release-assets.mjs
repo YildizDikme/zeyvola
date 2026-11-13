@@ -3,7 +3,10 @@
 // or published: the files are written to apps/desktop/out/release/<version>/ and a person attaches
 // them to the release.
 //
-//   node apps/desktop/scripts/release-assets.mjs [--platform darwin|win32] [--arch arm64|x64] [--draft]
+//   node apps/desktop/scripts/release-assets.mjs [--platform darwin|win32] [--arch arm64|x64] [--draft] [--smoke <report.json>]
+//
+// --smoke: a report written by the packaged app itself (`… --smoke --smoke-report <file>`); its
+// pass count and GPU go into RELEASE-STATUS.json, so "tested" says what ran and where.
 //
 // First runs `codec-audit --release` on the package; any failure or release blocker stops here.
 // --draft writes the files even when only release blockers remain (for review, never for publishing).
@@ -15,8 +18,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +31,7 @@ const arch = arg('arch', platform === 'win32' ? 'x64' : process.arch);
 const windows = platform === 'win32';
 const draft = process.argv.includes('--draft') || windows;
 const { version, author, homepage } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+const { createZip } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
 // The released profile is A (package.mjs default since 2026-11-13).
 const PROFILE = 'mp4';
 const pkgDir = join(appDir, 'out', PROFILE, `${platform}-${arch}`);
@@ -75,7 +79,7 @@ if (windows && existsSync(join(lic, 'MICROSOFT-D3DCOMPILER-TERMS.txt'))) extra.p
 for (const [from, to] of extra) copyFileSync(join(lic, from), join(folder, to));
 const zip = join(out, `Zeyvola-${version}-${label}${windows ? '-TASLAK' : ''}.zip`);
 rmSync(zip, { force: true });
-execFileSync('ditto', ['-c', '-k', '--norsrc', '--noextattr', '--noqtn', '--keepParent', folder, zip]); // no __MACOSX entries
+createZip(folder, zip); // macOS: ditto without __MACOSX entries; Windows: System32 bsdtar
 // macOS also as a disk image: the same folder plus a link to Applications for drag-to-install.
 let dmg = null;
 if (!windows) {
@@ -94,7 +98,11 @@ copyFileSync(bundle, join(out, basename(bundle)));
 // 4) Checksums of every file in the release folder (both platforms when both were prepared).
 const sha = (f) => createHash('sha256').update(readFileSync(f)).digest('hex');
 if (sha(join(out, basename(bundle))) !== src.bundle.sha256) { console.error('FFmpeg kaynak paketi kayıttaki dosya değil'); process.exit(1); }
-cpSync(auditJson, join(out, `codec-audit-${label}.json`));
+// The release copy names paths relative to the repository (and ~ for the home folder), so a
+// published audit carries no user name or local folder layout.
+const anonymize = (text) => [[root + sep, ''], [root, '.'], [homedir(), '~']]
+  .reduce((t, [from, to]) => t.replaceAll(from, to).replaceAll(JSON.stringify(from).slice(1, -1), to.replaceAll('\\', '\\\\')), text);
+writeFileSync(join(out, `codec-audit-${label}.json`), anonymize(readFileSync(auditJson, 'utf8')));
 
 // 5) What a recipient should know before running it: signing, and what still blocks publishing.
 const codesign = windows ? null : spawnSync('codesign', ['-dv', app], { encoding: 'utf8' }).stderr;
@@ -105,10 +113,21 @@ status[label] = {
   signing: windows
     ? 'imzasız (Authenticode yok): Windows SmartScreen "Windows bilgisayarınızı korudu" uyarısı gösterir'
     : `${/Signature=adhoc/.test(codesign ?? '') ? 'geçici (ad-hoc) imza' : 'imza okunamadı'}; Developer ID ve noter onayı (notarization) yok: Gatekeeper ilk açılışta uyarır`,
-  tested: windows ? 'gerçek Windows\'ta test edilmedi' : 'bu Mac\'te (arm64) otomatik duman testi ve codec denetimi geçti; gerçek kayıt testi ayrıca raporlanır',
+  tested: tested(),
   blockers: report.blockers,
 };
 writeFileSync(statusFile, `${JSON.stringify(status, null, 1)}\n`);
+function tested() {
+  const smokeFile = arg('smoke', null);
+  const smoke = smokeFile ? JSON.parse(readFileSync(smokeFile, 'utf8')) : null;
+  const passed = smoke ? `${smoke.checks.filter((c) => c.ok).length}/${smoke.checks.length}` : null;
+  const host = `${process.platform === 'darwin' ? 'macOS' : process.platform} ${process.arch === 'arm64' ? 'Apple Silicon' : process.arch}`;
+  const where = windows ? (process.platform === 'win32' && smoke ? `Windows'ta (${process.arch}) çalıştırıldı` : 'gerçek Windows\'ta test edilmedi')
+    : arch === process.arch ? `bu Mac'te (${host}) çalıştırıldı`
+      : arch === 'x64' && process.arch === 'arm64' ? `${host} Mac'te Rosetta 2 altında çalıştırıldı; gerçek Intel donanımında (Intel GPU, Intel VideoToolbox) test edilmedi`
+        : `bu mimaride çalıştırılmadı (derleyen makine ${host})`;
+  return smoke ? `${where}; paketin kendi duman testi ${passed} geçti${smoke.ok ? '' : ' (TAMAMI DEĞİL)'}${smoke.gpu ? ` · GPU: ${smoke.gpu}` : ''}; codec denetimi ayrıca (codec-audit-${label}.json)` : `${where}; duman testi sonucu verilmedi (--smoke)`;
+}
 const files = [...new Set([...Object.values(status).flatMap((s) => [join(out, s.zip), ...(s.dmg ? [join(out, s.dmg)] : [])]), join(out, basename(bundle))])].filter(existsSync);
 writeFileSync(join(out, 'SHA256SUMS.txt'), files.map((f) => `${sha(f)}  ${basename(f)}`).join('\n') + '\n');
 console.log(`\n${draft && report.blockers.length ? 'TASLAK (yayın engeli var, yayımlanmaz)' : 'Yayın dosyaları hazır'}: ${out}`);

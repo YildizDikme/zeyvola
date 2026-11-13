@@ -6,7 +6,10 @@
 # system DLL functions the helper calls). Output: bin/zeyvola-win.exe (unsigned).
 set -eu
 cd "$(dirname "$0")"
-ZIG=${ZIG:-../../tools/.cache/zig/zig}
+# zig: $ZIG, else tools/.cache/zig/zig, else the one on PATH.
+if [ -z "${ZIG:-}" ]; then
+  if [ -x ../../tools/.cache/zig/zig ]; then ZIG=../../tools/.cache/zig/zig; else ZIG=zig; fi
+fi
 mkdir -p bin .build
 LIBS=""
 for def in imports/*.def; do
