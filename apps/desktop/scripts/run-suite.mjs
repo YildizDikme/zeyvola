@@ -239,6 +239,8 @@ report.captureShape = log.split('\n').flatMap((l) => {
 // Part of every suite's verdict: a run that started OpenH264 fails, whatever the app reported.
 report.checks = [...(report.checks ?? []), { name: 'OpenH264 hiç başlatılmadı (uygulama günlüğünde [OpenH264] satırı yok)', ok: openH264Lines === 0, detail: `${openH264Lines} satır` }];
 report.ok = report.ok && openH264Lines === 0;
+// The report kept with --out is this one, with the OpenH264 check and the capture-shape lines.
+writeFileSync(reportFile, `${JSON.stringify(report, null, 1)}\n`);
 if (report.checks?.length) console.log('');
 for (const c of report.checks ?? []) {
   console.log(`${c.ok ? '  ✓' : '  ✗'} ${c.name}${c.detail ? `  — ${c.detail}` : ''}${c.ms ? `  (${Math.round(c.ms)} ms)` : ''}`);

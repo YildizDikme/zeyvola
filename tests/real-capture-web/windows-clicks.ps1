@@ -52,6 +52,20 @@ $form.Show()
 $shapeAt = $form.PointToScreen($panel.Location)
 function Pump([int]$ms) { $end = (Get-Date).AddMilliseconds($ms); while ((Get-Date) -lt $end) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 15 } }
 Pump 500
+# Is the square really on the screen? Mean colour of its middle, read back from the screen.
+function ScreenColor {
+  try {
+    $b = New-Object System.Drawing.Bitmap(40, 40)
+    $g = [System.Drawing.Graphics]::FromImage($b)
+    $g.CopyFromScreen($shapeAt.X + $size / 2 - 20, $shapeAt.Y + $size / 2 - 20, 0, 0, $b.Size)
+    $r = 0; $gg = 0; $bb = 0
+    for ($y = 0; $y -lt 40; $y += 4) { for ($x = 0; $x -lt 40; $x += 4) { $c = $b.GetPixel($x, $y); $r += $c.R; $gg += $c.G; $bb += $c.B } }
+    $g.Dispose(); $b.Dispose()
+    return @([int]($r / 100), [int]($gg / 100), [int]($bb / 100))
+  } catch { return "okunamadi: $($_.Exception.Message)" }
+}
+$screenColor = ScreenColor
+$formVisible = $form.Visible
 # left down/up 0x2/0x4, right down/up 0x8/0x10
 $plan = @(
   @{ fx = 0.25; fy = 0.30; b = 'l' }, @{ fx = 0.75; fy = 0.30; b = 'l' }, @{ fx = 0.50; fy = 0.50; b = 'r' },
@@ -78,7 +92,7 @@ foreach ($c in $plan) {
 $deadline2 = (Get-Date).AddSeconds(20)
 while (-not (Test-Path $stopped) -and (Get-Date) -lt $deadline2) { Pump 200 }
 $form.Close()
-$shape = [ordered]@{ x = $shapeAt.X; y = $shapeAt.Y; size = $size; fx = $shapeAt.X / $w; fy = $shapeAt.Y / $h; fw = $size / $w; fh = $size / $h }
+$shape = [ordered]@{ x = $shapeAt.X; y = $shapeAt.Y; size = $size; fx = $shapeAt.X / $w; fy = $shapeAt.Y / $h; fw = $size / $w; fh = $size / $h; screenColor = $screenColor; formVisible = $formVisible }
 $json = [ordered]@{ screen = @{ width = $w; height = $h }; clicks = $clicks; shape = $shape } | ConvertTo-Json -Depth 4 -Compress
 [System.IO.File]::WriteAllText((Join-Path $SignalDir 'clicks.json'), $json, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "windows-clicks: $($clicks.Count) tiklama ($w x $h)"

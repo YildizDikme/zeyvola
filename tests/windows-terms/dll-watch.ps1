@@ -21,7 +21,8 @@ function Version([string]$p) {
   if (-not (Test-Path $p)) { return $null }
   # [pscustomobject]: Windows PowerShell 5.1 writes a nested [ordered] table as an empty object.
   $v = (Get-Item $p).VersionInfo
-  $hash = try { (Get-FileHash $p -Algorithm SHA256 -ErrorAction Stop).Hash.ToLower() } catch { "okunamadi: $($_.Exception.Message)" }
+  # .NET directly: Get-FileHash is not always loaded in a hidden Windows PowerShell 5.1 process.
+  $hash = try { $sha = [System.Security.Cryptography.SHA256]::Create(); $fs = [System.IO.File]::Open($p, 'Open', 'Read', 'ReadWrite'); try { ([BitConverter]::ToString($sha.ComputeHash($fs)) -replace '-', '').ToLower() } finally { $fs.Dispose() } } catch { "okunamadi: $($_.Exception.Message)" }
   [pscustomobject]@{ path = $p; fileVersion = $v.FileVersion; productVersion = $v.ProductVersion; bytes = (Get-Item $p).Length; sha256 = $hash }
 }
 function TypeOf($p) {
