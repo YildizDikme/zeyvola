@@ -1,0 +1,19 @@
+LIBRARY KERNEL32.dll
+EXPORTS
+CloseHandle
+CreateFileW
+CreateThread
+DeleteFileW
+ExitProcess
+GetCommandLineW
+GetCurrentThreadId
+GetLastError
+GetModuleHandleW
+GetProcAddress
+GetStdHandle
+GetTickCount64
+ReadFile
+SetFilePointer
+WriteFile
+lstrcmpA
+lstrcmpW

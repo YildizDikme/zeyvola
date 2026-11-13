@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// Downloads official Electron release artifacts for packaging, with SHA-256 verification
+// against the release's SHASUMS256.txt (done by @electron/get, Electron's own downloader).
+// Files land in Electron's cache (~/Library/Caches/electron on macOS); nothing else is fetched.
+//
+//   node tools/electron-artifacts.mjs electron:win32:x64 ffmpeg:darwin:arm64 ...
+//   node tools/electron-artifacts.mjs --print ffmpeg:darwin:arm64      (path only if cached; no download)
+//
+// Printed as JSON: { "<spec>": "<zip path>" }.
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const req = createRequire(join(ROOT, 'apps', 'desktop', 'package.json'));
+const electronDir = dirname(req.resolve('electron/package.json'));
+export const ELECTRON_VERSION = JSON.parse(readFileSync(join(electronDir, 'package.json'), 'utf8')).version;
+
+async function getter() {
+  const r = createRequire(join(electronDir, 'package.json'));
+  return import(r.resolve('@electron/get'));
+}
+
+function details(spec) {
+  if (spec === 'SHASUMS256.txt') return { version: ELECTRON_VERSION, artifactName: 'SHASUMS256.txt', isGeneric: true, file: 'SHASUMS256.txt' };
+  const [artifactName, platform, arch] = spec.split(':');
+  if (!['electron', 'ffmpeg'].includes(artifactName) || !platform || !arch) throw new Error(`Geçersiz tanım: ${spec}`);
+  return { version: ELECTRON_VERSION, artifactName, platform, arch, file: `${artifactName}-v${ELECTRON_VERSION}-${platform}-${arch}.zip` };
+}
+
+/** Already downloaded copy in Electron's cache, or null (never touches the network). */
+export function cached(spec) {
+  const { file } = details(spec);
+  const base = process.env.electron_config_cache
+    ?? (process.platform === 'darwin' ? join(homedir(), 'Library', 'Caches', 'electron')
+      : process.platform === 'win32' ? join(process.env.LOCALAPPDATA ?? homedir(), 'electron', 'Cache')
+        : join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'electron'));
+  if (!existsSync(base)) return null;
+  for (const d of readdirSync(base)) if (existsSync(join(base, d, file))) return join(base, d, file);
+  return null;
+}
+
+/** spec: "<artifact>:<platform>:<arch>" (artifact: electron | ffmpeg) or "SHASUMS256.txt". */
+export async function artifact(spec) {
+  const { downloadArtifact } = await getter();
+  const { file: _file, ...d } = details(spec);
+  return downloadArtifact(d);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const print = args.includes('--print');
+  const out = {};
+  for (const spec of args.filter((a) => !a.startsWith('--'))) {
+    try { out[spec] = print ? cached(spec) : await artifact(spec); } catch (e) { out[spec] = null; console.error(`${spec}: ${e.message}`); process.exitCode = 1; }
+  }
+  console.log(JSON.stringify(out, null, 1));
+}

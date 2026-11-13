@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Node sürümü .nvmrc'den. / Node version from .nvmrc.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # pnpm sürümü package.json "packageManager" alanından (Node ile gelen Corepack).
+      # pnpm version from the "packageManager" field in package.json (Corepack ships with Node).
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      # pnpm smoke burada çalışmaz: ekran ve GPU ister. / pnpm smoke is not run here: it needs a display and a GPU.

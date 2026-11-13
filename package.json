@@ -1,0 +1,40 @@
+{
+  "name": "zeyvola-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "author": "Yıldız Dikme",
+  "license": "PolyForm-Shield-1.0.0",
+  "homepage": "https://github.com/YildizDikme/zeyvola",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YildizDikme/zeyvola.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @zeyvola/desktop dev",
+    "build": "pnpm --filter @zeyvola/desktop build",
+    "start": "pnpm --filter @zeyvola/desktop start",
+    "smoke": "pnpm --filter @zeyvola/desktop smoke",
+    "perftest": "node apps/desktop/scripts/run-suite.mjs perf",
+    "uitest": "node apps/desktop/scripts/run-suite.mjs ui",
+    "docshots": "node apps/desktop/scripts/run-suite.mjs docs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node tools/check-boundaries.mjs && vitest run",
+    "licenses": "node tools/license-inventory.mjs",
+    "package": "node apps/desktop/scripts/package.mjs",
+    "codec-audit": "node tools/codec-audit.mjs",
+    "native:mac": "bash native/recorder-macos/build.sh",
+    "native:input": "bash native/input-macos/build.sh",
+    "native:audio": "bash native/audio-macos/build.sh",
+    "native:win": "bash native/helper-windows/build.sh"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

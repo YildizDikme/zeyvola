@@ -1,0 +1,94 @@
+MICROSOFT BİLEŞENİ İÇİN KULLANICI KOŞULLARI (d3dcompiler_47.dll)
+Sürüm 2026-10-17
+
+Zeyvola'nın Windows sürümü, Microsoft Corporation'a ait "Direct3D HLSL Compiler" dosyasını
+(d3dcompiler_47.dll) içerir. Bu dosya Zeyvola'nın değildir; Microsoft'un Windows SDK lisansındaki
+dağıtılabilir kod koşulları kapsamında Zeyvola ile birlikte dağıtılır. Microsoft bu dağıtımı,
+kullanıcıların aşağıdaki koşulları kabul etmesine bağlar. Zeyvola'yı Windows'ta kullanmak için bu
+koşulları kabul etmeniz gerekir.
+
+Bu koşullar YALNIZCA d3dcompiler_47.dll dosyası için geçerlidir. Zeyvola'nın kendi lisansını
+(PolyForm Shield 1.0.0) ve uygulamadaki açık kaynak bileşenlerin lisanslarını değiştirmez. Özellikle
+FFmpeg kitaplıkları (LGPL-2.1) üzerinde LGPL'nin size tanıdığı hakları kısıtlamaz: bu kitaplıkları
+değiştirebilir, değiştirilmiş sürümleriyle değiştirebilir ve bunun için gereken tersine mühendisliği
+yapabilirsiniz.
+
+1. Dosya size satılmaz, yalnızca kullanım hakkı verilir. Microsoft, bu koşullarda açıkça verilmeyen
+   bütün hakları saklı tutar.
+2. Dosyayı yalnızca Zeyvola'nın bir parçası olarak ve Microsoft Windows üzerinde kullanabilirsiniz.
+3. Yürürlükteki hukuk bu sınırlamaya rağmen size daha fazla hak tanımadıkça:
+   a. dosyadaki teknik sınırlamaları aşamazsınız;
+   b. dosyada tersine mühendislik yapamaz, kaynak koda dönüştüremez veya parçalarına ayıramazsınız;
+      yürürlükteki hukukun bu sınırlamaya rağmen açıkça izin verdiği ölçü saklıdır;
+   c. dosyayı başkalarının kopyalaması için yayımlayamaz; kiralayamaz, ödünç veremez; Zeyvola'dan
+      ayrı olarak başkasına devredemez;
+   d. dosyayı ticari yazılım barındırma hizmetlerinde kullanamazsınız;
+   e. dosya üzerinde yapılan bir performans ölçümünün sonuçlarını Microsoft'un önceden yazılı onayı
+      olmadan üçüncü kişilere açıklayamazsınız.
+4. Dosyadaki telif hakkı, marka ve patent bildirimlerini değiştiremez veya kaldıramazsınız.
+5. Zeyvola'yı başkalarına dağıtırsanız, alıcıların da bu koşulları kabul etmesini sağlamalısınız.
+6. Dosya ABD ihracat mevzuatına tabidir. Dosyaya uygulanan bütün ulusal ve uluslararası ihracat
+   kurallarına uymalısınız (www.microsoft.com/exporting).
+7. Microsoft bu dosya için destek hizmeti vermez.
+8. GARANTİ YOKTUR. Dosya "olduğu gibi" sağlanır; kullanım riski size aittir. Microsoft hiçbir açık
+   garanti veya taahhüt vermez. Yerel hukukunuzun tanıdığı ve bu koşulların değiştiremeyeceği tüketici
+   hakları saklıdır. Yerel hukukun izin verdiği ölçüde Microsoft; satılabilirlik, belirli bir amaca
+   uygunluk ve hak ihlali olmamasına ilişkin zımni garantileri hariç tutar.
+9. SORUMLULUK SINIRI. Microsoft'tan ve tedarikçilerinden yalnızca 5,00 ABD dolarına kadar doğrudan
+   zararınızı talep edebilirsiniz. Dolaylı zararlar, kâr kaybı, özel, arızi veya sonuç olarak doğan
+   zararlar dahil başka hiçbir zararı talep edemezsiniz. Bu sınır; dosyayla, üçüncü taraf internet
+   sitelerindeki içerikle veya üçüncü taraf programlarla ilgili her şeye ve yürürlükteki hukukun izin
+   verdiği ölçüde sözleşmeye, garantiye, teminata veya şarta aykırılığa, kusursuz sorumluluğa, ihmale
+   veya başka bir haksız fiile dayanan taleplere uygulanır. Microsoft zarar olasılığını biliyor veya
+   bilmesi gerekiyor olsa da uygulanır. Bazı ülkeler bu sınırlamaya izin vermeyebilir; o durumda yerel
+   hukuk geçerlidir.
+
+Bu koşullar Microsoft'un Windows SDK lisansındaki korumaları son kullanıcıya aktarmak için
+hazırlanmıştır. Microsoft'un dosyaya ilişkin hakları bu metinle sınırlı değildir.
+
+----------------------------------------------------------------------------------------------------
+
+USER TERMS FOR A MICROSOFT COMPONENT (d3dcompiler_47.dll)
+Version 2026-10-17
+
+The Windows version of Zeyvola includes Microsoft Corporation's "Direct3D HLSL Compiler" file
+(d3dcompiler_47.dll). This file is not Zeyvola's; it is distributed with Zeyvola as distributable code
+under the terms of Microsoft's Windows SDK license. Microsoft makes this distribution conditional on
+users accepting the terms below. You must accept them to use Zeyvola on Windows.
+
+These terms apply ONLY to the file d3dcompiler_47.dll. They do not change Zeyvola's own license
+(PolyForm Shield 1.0.0) or the licenses of the open-source components in the app. In particular, they
+do not restrict the rights the LGPL gives you for the FFmpeg libraries (LGPL-2.1): you may modify those
+libraries, replace them with modified versions and do the reverse engineering needed for that.
+
+1. The file is licensed, not sold. Microsoft reserves all rights not expressly granted in these terms.
+2. You may use the file only as part of Zeyvola and only on Microsoft Windows.
+3. Unless applicable law gives you more rights despite this limitation, you may not:
+   a. work around any technical limitations in the file;
+   b. reverse engineer, decompile or disassemble the file, except and only to the extent that
+      applicable law expressly permits, despite this limitation;
+   c. publish the file for others to copy; rent, lease or lend it; or transfer it to anyone apart from
+      Zeyvola;
+   d. use the file for commercial software hosting services;
+   e. disclose the results of any benchmark test of the file to a third party without Microsoft's
+      prior written approval.
+4. You may not alter or remove any copyright, trademark or patent notice in the file.
+5. If you distribute Zeyvola to others, you must have them accept these terms too.
+6. The file is subject to United States export laws and regulations. You must comply with all domestic
+   and international export laws and regulations that apply to it (www.microsoft.com/exporting).
+7. Microsoft does not provide support services for the file.
+8. NO WARRANTY. The file is provided "as is"; you bear the risk of using it. Microsoft gives no express
+   warranties, guarantees or conditions. You may have consumer rights under your local laws which these
+   terms cannot change. To the extent permitted under your local laws, Microsoft excludes the implied
+   warranties of merchantability, fitness for a particular purpose and non-infringement.
+9. LIMITATION OF LIABILITY. You can recover from Microsoft and its suppliers only direct damages up to
+   U.S. $5.00. You cannot recover any other damages, including consequential, lost profits, special,
+   indirect or incidental damages. This limitation applies to anything related to the file, content
+   on third-party internet sites or third-party programs, and, to the extent permitted by applicable
+   law, to claims for breach of contract, breach of warranty, guarantee or condition, strict liability,
+   negligence or other tort. It applies even if Microsoft knew or should have known about the
+   possibility of the damages. Some countries may not allow this limitation; in that case your local
+   law applies.
+
+These terms are written to pass the protections of Microsoft's Windows SDK license on to end users.
+Microsoft's rights in the file are not limited to this text.

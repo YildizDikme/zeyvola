@@ -1,0 +1,50 @@
+name: Hata bildirimi / Bug report
+description: Zeyvola'da karşılaştığınız bir hatayı bildirin. / Report a bug in Zeyvola.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Teşekkürler! Şimdilik dışarıdan kod katkısı (pull request) kabul edilmiyor; hata bildirimleri ve öneriler Issues üzerinden memnuniyetle karşılanır.
+        Güvenlik açıklarını burada **bildirmeyin**; deponun kökündeki `SECURITY.md` dosyasında anlatılan özel bildirim yolunu kullanın.
+        Kayıtlarınızdan ekran görüntüsü ya da video eklemeden önce kişisel bilgileri gizleyin.
+
+        *Thanks! Code contributions (pull requests) are not accepted for now; bug reports and suggestions are welcome as Issues.
+        Do **not** report security problems here; use the private route described in SECURITY.md.
+        Hide personal information before attaching screenshots or videos of your recordings.*
+  - type: input
+    id: version
+    attributes:
+      label: Zeyvola sürümü / Zeyvola version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS sürümü ve Mac modeli / macOS version and Mac model
+      placeholder: "macOS 15.x, MacBook Air M2"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Ne oldu? / What happened?
+      description: Hatayı ve beklediğiniz davranışı yazın. / Describe the bug and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Yeniden üretme adımları / Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Ek bilgi / Additional information
+      description: Ekran görüntüsü, dışa aktarma ayarları (format, çözünürlük, fps), hata mesajı. / Screenshots, export settings (format, resolution, fps), error messages.

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Zeyvola Test Deseni</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101418; color: #e8edf2; font: 600 18px -apple-system, system-ui, sans-serif; user-select: none; cursor: default; }
+  #grid { position: absolute; inset: 0; background-image: linear-gradient(#ffffff10 1px, transparent 1px), linear-gradient(90deg, #ffffff10 1px, transparent 1px); background-size: 5% 6.25%; }
+  #title { position: absolute; left: 3%; top: 4%; font-size: 26px; }
+  #time { position: absolute; left: 3%; top: 10%; font: 500 22px ui-monospace, monospace; color: #9fb3c8; }
+  #hint { position: absolute; left: 3%; top: 16%; color: #f5c46b; }
+  /* Sync square: white for 100 ms every 2 s together with a 1 kHz tone. */
+  #sync { position: absolute; left: 88%; top: 4%; width: 10%; height: 14%; background: #000; outline: 2px solid #ffffff30; }
+  #sync.on { background: #fff; }
+  #mover { position: absolute; top: 90%; width: 4%; height: 6%; background: #4fa3ff; border-radius: 6px; }
+  .target { position: absolute; width: 9%; height: 14.4%; margin: -4.5% 0 0 -4.5%; border-radius: 50%; background: #23303c; outline: 3px solid #4fa3ff; display: grid; place-items: center; font-size: 34px; }
+  .target.hit { background: #fff; color: #000; }
+  .target.done { outline-color: #3ecf8e; }
+  .target.next { outline: 6px solid #f5c46b; }
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<div id="title">Zeyvola Test Deseni · sentetik içerik</div>
+<div id="time">0.000 s</div>
+<div id="hint">Sarı çerçeveli hedefe tıklayın (1 → 6)</div>
+<div id="sync"></div>
+<div id="mover"></div>
+<script>
+  // Fixed layout, so analysis knows where everything is (fractions of the window).
+  const TARGETS = [[0.2, 0.42], [0.5, 0.42], [0.8, 0.42], [0.2, 0.72], [0.5, 0.72], [0.8, 0.72]];
+  // Guided order: only the next target is armed; it arms 2.5 s after the previous click,
+  // like real use (click, look, click elsewhere), so zoom suggestions can be checked per click.
+  let next = 1;
+  let armedAt = 0;
+  const targets = [];
+  const log = (e) => { try { window.patternBridge?.log({ ...e, epochMs: performance.timeOrigin + performance.now() }); } catch {} };
+  TARGETS.forEach(([x, y], i) => {
+    const d = document.createElement('div');
+    d.className = 'target';
+    d.style.left = `${x * 100}%`;
+    d.style.top = `${y * 100}%`;
+    d.textContent = String(i + 1);
+    d.addEventListener('mousedown', (ev) => {
+      const inOrder = i + 1 === next && performance.now() >= armedAt;
+      d.classList.add('hit');
+      setTimeout(() => d.classList.remove('hit'), 150);
+      if (inOrder) { d.classList.add('done'); d.classList.remove('next'); next++; armedAt = performance.now() + 2500; }
+      log({ type: 'click', target: i + 1, inOrder, x: ev.clientX / innerWidth, y: ev.clientY / innerHeight });
+    });
+    targets.push(d);
+    document.body.appendChild(d);
+  });
+  document.addEventListener('mousedown', (ev) => {
+    if (!(ev.target instanceof HTMLElement) || !ev.target.classList.contains('target')) log({ type: 'click', target: 0, x: ev.clientX / innerWidth, y: ev.clientY / innerHeight });
+  });
+
+  let audio = null;
+  function beep(at) {
+    if (!audio) return;
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.frequency.value = 1000;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(0.2, at + 0.002);
+    g.gain.setValueAtTime(0.2, at + 0.098);
+    g.gain.linearRampToValueAtTime(0.0001, at + 0.1);
+    o.connect(g).connect(audio.destination);
+    o.start(at);
+    o.stop(at + 0.11);
+  }
+  try { audio = new AudioContext({ latencyHint: 'interactive' }); } catch {}
+
+  const sync = document.getElementById('sync');
+  const mover = document.getElementById('mover');
+  const time = document.getElementById('time');
+  const t0 = performance.now();
+  let lastFlash = -1;
+  function frame(now) {
+    const s = (now - t0) / 1000;
+    time.textContent = `${s.toFixed(3)} s`;
+    mover.style.left = `${3 + ((s * 20) % 90)}%`; // constant motion, so every frame differs
+    targets.forEach((d, i) => d.classList.toggle('next', i + 1 === next && now >= armedAt));
+    const k = Math.floor(s / 2);
+    if (k > 0 && k !== lastFlash) {
+      lastFlash = k;
+      sync.classList.add('on');
+      // When the beep leaves the speaker, on this page's clock (the device's own output timestamp).
+      let beepEpochMs = null;
+      if (audio) {
+        const at = audio.currentTime;
+        const out = audio.getOutputTimestamp?.();
+        beep(at);
+        if (out && out.performanceTime > 0) beepEpochMs = performance.timeOrigin + out.performanceTime + (at - out.contextTime) * 1000;
+      }
+      log({ type: 'flash', n: k, audio: audio?.state ?? 'none', frameEpochMs: performance.timeOrigin + now, beepEpochMs, outputLatency: audio?.outputLatency ?? null });
+      setTimeout(() => sync.classList.remove('on'), 100);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // When each click's visual response (the target turning white) reached the screen: Event Timing
+  // gives the input's hardware time and the presentation of the next frame (8 ms resolution).
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (!['mousedown', 'pointerdown', 'contextmenu', 'mouseup', 'pointerup'].includes(e.name)) continue;
+        log({ type: 'eventTiming', name: e.name, inputEpochMs: performance.timeOrigin + e.startTime, presentEpochMs: performance.timeOrigin + e.startTime + e.duration, durationMs: e.duration, processingStartMs: e.processingStart - e.startTime, processingEndMs: e.processingEnd - e.startTime });
+      }
+    }).observe({ type: 'event', durationThreshold: 16, buffered: true });
+  } catch {}
+  log({ type: 'loaded', width: innerWidth, height: innerHeight, audio: audio?.state ?? 'none', outputLatency: audio?.outputLatency ?? null, baseLatency: audio?.baseLatency ?? null });
+</script>
+</body>
+</html>

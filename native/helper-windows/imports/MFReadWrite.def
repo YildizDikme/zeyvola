@@ -1,0 +1,3 @@
+LIBRARY MFReadWrite.dll
+EXPORTS
+MFCreateSourceReaderFromURL

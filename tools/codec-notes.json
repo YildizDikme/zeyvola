@@ -1,0 +1,243 @@
+{
+  "$comment": "Codec bileşenleri: açık kaynak (telif) lisansı ile patent durumu ayrı tutulur. Patent durumu hiçbir satırda çözülmüş gösterilmez. 'profiles': satırın geçerli olduğu dağıtımlar (mp4 = A, webm = B yayımlanan, webm-vp8 = deneysel VP8); paket bildirimleri yalnızca kendi profilinin satırlarını içerir. 'chromiumTitle' doluysa Electron'un LICENSES.chromium.html dosyasında bu başlıklı bir giriş bulunması test edilir.",
+  "rows": [
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg (libffmpeg, Electron'un codec'siz derlemesi)",
+      "nameEn": "FFmpeg (libffmpeg, Electron's build without proprietary codecs)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": "ffmpeg",
+      "where": {
+        "tr": "Ayrı, dinamik bağlanan kitaplık (macOS: libffmpeg.dylib, Windows: ffmpeg.dll). Electron'un resmi tescilli codec'siz derlemesi (Electron'un derleme ayarları: ffmpeg_branding \"Chromium\", proprietary_codecs false); ölçülen çözücüler: FLAC, MP3, Vorbis, Opus, PCM. H.264 ve AAC çözücüsü yok, kodlayıcı yok.",
+        "en": "Separate, dynamically linked library (macOS: libffmpeg.dylib, Windows: ffmpeg.dll). Electron's official build without proprietary codecs (Electron's build arguments: ffmpeg_branding \"Chromium\", proprietary_codecs false); measured decoders: FLAC, MP3, Vorbis, Opus, PCM. No H.264 or AAC decoder, no encoders."
+      },
+      "license": {
+        "tr": "Bu yazılım FFmpeg projesinin kitaplıklarını LGPLv2.1 altında kullanır (LGPL-2.1 veya sonrası; tam metin LICENSES.chromium.html, \"ffmpeg\" girişi). Karşılık gelen kaynak: chromium/third_party/ffmpeg 2b68d2babae7 (Chromium 152.0.7977.167'nin sabitlediği revizyon), Electron'un yaması ve derleme ayarları; her GitHub sürümüne ayrı dosya olarak eklenir (FFMPEG-LGPL.md).",
+        "en": "This software uses libraries from the FFmpeg project under the LGPLv2.1 (LGPL-2.1-or-later; full text in LICENSES.chromium.html, entry \"ffmpeg\"). Corresponding source: chromium/third_party/ffmpeg 2b68d2babae7 (the revision Chromium 152.0.7977.167 pins), Electron's patch and build arguments; attached to every GitHub release as a separate file (FFMPEG-LGPL.md)."
+      },
+      "patent": {
+        "tr": "Patent havuzlu çözücüler (H.264, AAC) pakette yok. Kalan biçimler için bilinen aktif bir havuz bulunamadı; hukuken doğrulanmadı.",
+        "en": "Patent-pool decoders (H.264, AAC) are not in the package. No active pool was found for the remaining formats; not legally verified."
+      },
+      "status": "low-risk-unverified"
+    },
+    {
+      "id": "openh264",
+      "name": "OpenH264 (Electron içinde)",
+      "nameEn": "OpenH264 (inside Electron)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": "OpenH264",
+      "where": {
+        "tr": "Electron'un ana ikilisinde statik olarak derlenmiş (ölçüldü). Zeyvola onu hiçbir dağıtımda istemez: H.264 yalnızca donanım (işletim sistemi) kodlayıcısından istenir; tam smoke testinde OpenH264 bir kez bile başlatılmadı. Resmi Electron ikililerinden çıkarılamaz.",
+        "en": "Statically compiled into Electron's main binary (measured). Zeyvola never asks for it in either distribution: H.264 is only requested from the hardware (operating-system) encoder; it was not started once during the full smoke test. It cannot be removed from official Electron binaries."
+      },
+      "license": {
+        "tr": "BSD-2-Clause",
+        "en": "BSD-2-Clause"
+      },
+      "patent": {
+        "tr": "Cisco'nun H.264 patent güvencesi yalnızca kurulumda Cisco'dan indirilen ikili için geçerli; kaynaktan derlenmiş bu kopyayı kapsamaz. Kullanılmayan bir kodlayıcıyı dağıtmanın lisans gerektirip gerektirmediği belirsiz.",
+        "en": "Cisco's H.264 patent coverage applies only to its binary downloaded at install time, not to this copy built from source. Whether distributing an unused encoder needs a license is unclear."
+      },
+      "status": "legal-review"
+    },
+    {
+      "id": "h264-encode",
+      "name": "H.264 kodlama (MP4 dışa aktarma)",
+      "nameEn": "H.264 encoding (MP4 export)",
+      "profiles": [
+        "mp4",
+        "webm"
+      ],
+      "chromiumTitle": null,
+      "where": {
+        "tr": "Yalnızca işletim sisteminin donanım kodlayıcısı: macOS VideoToolbox (ölçüldü), Windows Media Foundation (Windows'ta test edilmedi). Electron'un yazılım H.264 kodlayıcısı (OpenH264) hiç istenmez. Kodlayıcı yoksa dışa aktarma başlamadan söylenir ve WebM önerilir; MP4'e başka codec yazılmaz. A dağıtımında macOS kayıt yardımcısı da ekranı ve kamerayı VideoToolbox ile H.264 yazar.",
+        "en": "Only the operating system's hardware encoder: macOS VideoToolbox (measured), Windows Media Foundation (not tested on Windows). Electron's software H.264 encoder (OpenH264) is never asked for. Without a hardware encoder the app says so before the export starts and suggests WebM; no other codec is written into MP4. In the A distribution the macOS recorder also writes screen and camera as H.264 through VideoToolbox."
+      },
+      "license": {
+        "tr": "Kodlayıcı Zeyvola'nın değil; işletim sistemine ait",
+        "en": "The encoder is not Zeyvola's; it belongs to the operating system"
+      },
+      "patent": {
+        "tr": "Apple (macOS Tahoe 26 SLA §14 D) ve Microsoft (Windows 11 lisans koşulları) AVC işlevini yalnızca tüketicinin kişisel ve ticari olmayan kullanımı için lisanslıyor; ticari kullanım ek lisans gerektiriyor. Via LA AVC havuzu aktif. Lisans sahibinin kim olacağı belirsiz.",
+        "en": "Apple (macOS Tahoe 26 SLA §14 D) and Microsoft (Windows 11 license terms) license AVC functionality only for a consumer's personal and non-commercial use; commercial use needs additional licensing. The Via LA AVC pool is active. Who the licensee would be is unclear."
+      },
+      "status": "legal-review"
+    },
+    {
+      "id": "h264-decode",
+      "name": "H.264 çözme (kayıtlar ve içe aktarılan videolar)",
+      "nameEn": "H.264 decoding (recordings and imported videos)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": null,
+      "where": {
+        "tr": "Pakette H.264 çözücü yok; H.264 yalnızca işletim sisteminin çözücüsüyle çözülür (macOS VideoToolbox, ölçüldü; Windows'ta Media Foundation/donanım çözücüsü, test edilmedi). B dağıtımında yalnızca kullanıcının içe aktardığı H.264 videolar için.",
+        "en": "No H.264 decoder in the package; H.264 is decoded only by the operating system's decoder (macOS VideoToolbox, measured; on Windows Media Foundation / the hardware decoder, not tested). In the B distribution only for H.264 videos the user imports."
+      },
+      "license": {
+        "tr": "Çözücü Zeyvola'nın değil; işletim sistemine ait",
+        "en": "The decoder is not Zeyvola's; it belongs to the operating system"
+      },
+      "patent": {
+        "tr": "İşletim sistemi lisanslarındaki AVC bildirimi kod çözmeyi de kişisel ve ticari olmayan kullanımla sınırlıyor. Hukuken doğrulanmadı.",
+        "en": "The AVC notice in the operating-system licenses limits decoding to personal and non-commercial use as well. Not legally verified."
+      },
+      "status": "legal-review"
+    },
+    {
+      "id": "aac-encode",
+      "name": "AAC kodlama (MP4 dışa aktarma)",
+      "nameEn": "AAC encoding (MP4 export)",
+      "profiles": [
+        "mp4",
+        "webm"
+      ],
+      "chromiumTitle": null,
+      "where": {
+        "tr": "İşletim sisteminin kodlayıcısı (MP4 dışa aktarmanın sesi): libffmpeg'de kodlayıcı yok (ölçüldü); macOS'ta AudioToolbox, Windows'ta Media Foundation (Windows'ta test edilmedi). Kodlayıcı yoksa MP4 yerine WebM önerilir; MP4'e Opus yazılmaz. Kayıtlar AAC değil Opus ile yazılır.",
+        "en": "The operating system's encoder (the sound of MP4 exports): libffmpeg has no encoders (measured); AudioToolbox on macOS, Media Foundation on Windows (not tested on Windows). Without one, WebM is suggested instead of MP4; Opus is never written into MP4. Recordings are written with Opus, not AAC."
+      },
+      "license": {
+        "tr": "Kodlayıcı Zeyvola'nın değil",
+        "en": "The encoder is not Zeyvola's"
+      },
+      "patent": {
+        "tr": "Via LA AAC: son kullanıcı kodlayıcı/çözücü ürünleri lisans gerektirir (başlangıç ücreti 15.000 $, küçük işletmeye 1.000 $; birim başı 0,98 $'dan). İşletim sistemi kodlayıcısını çağıran bir uygulamanın 'ürün' sayılıp sayılmadığı belirsiz. AAC içeriğin dağıtımı ücretsiz.",
+        "en": "Via LA AAC: end-user encoder/decoder products need a license (initial fee USD 15,000, USD 1,000 for small entities; from USD 0.98 per unit). Whether an app that calls the operating system's encoder is such a product is unclear. Distributing AAC content is free."
+      },
+      "status": "legal-review"
+    },
+    {
+      "id": "aac-decode",
+      "name": "AAC çözme (içe aktarılan videoların sesi)",
+      "nameEn": "AAC decoding (sound of imported videos)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": null,
+      "where": {
+        "tr": "Pakette AAC çözücü yok. AAC sesli bir video eklenince ses işletim sisteminin kendi çözücüsüyle çözülür: macOS'ta AVFoundation (bin/zeyvola-audio, Opus olarak yeniden yazar), Windows'ta Media Foundation (resources/bin/zeyvola-win.exe, 16 bit PCM WAV yazar; Windows'ta test edilmedi). Çözülemezse video sessiz eklenir ve kullanıcı uyarılır.",
+        "en": "No AAC decoder in the package. When a video with AAC sound is added, the operating system's own decoder decodes the sound: AVFoundation on macOS (bin/zeyvola-audio, rewrites it as Opus), Media Foundation on Windows (resources/bin/zeyvola-win.exe, writes 16-bit PCM WAV; not tested on Windows). If it cannot be decoded, the video is added without sound and the user is warned."
+      },
+      "license": {
+        "tr": "Çözücü Zeyvola'nın değil; işletim sistemine ait",
+        "en": "The decoder is not Zeyvola's; it belongs to the operating system"
+      },
+      "patent": {
+        "tr": "AAC kodlama satırındaki belirsizlik çözme için de geçerli.",
+        "en": "The uncertainty in the AAC encoding row applies to decoding too."
+      },
+      "status": "legal-review"
+    },
+    {
+      "id": "libvpx",
+      "name": "VP9 / VP8 (libvpx)",
+      "nameEn": "VP9 / VP8 (libvpx)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": "libvpx",
+      "where": {
+        "tr": "Electron (WebM dışa aktarma, Chromium kayıt yolu, çözme)",
+        "en": "Electron (WebM export, Chromium recording path, decoding)"
+      },
+      "license": {
+        "tr": "BSD-3-Clause ve Google'ın ayrı patent izni",
+        "en": "BSD-3-Clause plus Google's separate patent grant"
+      },
+      "patent": {
+        "tr": "Google, WebM projesinin dağıttığı uygulamalar (libvpx) için telifsiz, süresiz patent izni veriyor; izin Google'ın kendi patentleriyle sınırlı. Sisvel'in VP9 havuzu 'VP9 kullanan her tüketici ürününü' kapsadığını söylüyor, yalnız yazılım ürünlerinden söz etmiyor. Hukuken doğrulanmadı.",
+        "en": "Google grants a royalty-free, perpetual patent license for the implementations the WebM project distributes (libvpx), limited to Google's own patents. Sisvel's VP9 pool says it covers any consumer product using VP9 and does not mention software-only products. Not legally verified."
+      },
+      "status": "low-risk-unverified"
+    },
+    {
+      "id": "opus",
+      "name": "Opus (libopus; macOS'ta işletim sisteminin Opus kodlayıcısı)",
+      "nameEn": "Opus (libopus; on macOS the system's Opus encoder)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": "opus",
+      "where": {
+        "tr": "Electron (WebM/MP4 ses kodlama ve çözme). macOS kayıt yardımcısı mikrofon ve sistem sesini macOS'un Opus kodlayıcısıyla MP4'e yazar.",
+        "en": "Electron (WebM/MP4 audio encoding and decoding). The macOS recorder writes microphone and system audio to MP4 with macOS's Opus encoder."
+      },
+      "license": {
+        "tr": "BSD-3-Clause ve Xiph/Broadcom/Microsoft patent izinleri",
+        "en": "BSD-3-Clause plus Xiph/Broadcom/Microsoft patent licenses"
+      },
+      "patent": {
+        "tr": "Xiph.Org, Broadcom ve Microsoft telifsiz ve otomatik patent izni veriyor (dava açana karşı sona erme koşuluyla). Bazı şirketlerin IETF'ye ücretli olabilecek bildirimleri var; Opus sitesi dış hukuk görüşüne göre bunların lisanssız uygulanabildiğini söylüyor. Vectis havuzunun basın bülteni bağımsız yazılımı hedeflemediğini söylüyor. Hukuken doğrulanmadı.",
+        "en": "Xiph.Org, Broadcom and Microsoft grant royalty-free, automatic patent licenses (ending for those who sue). Some companies filed possibly royalty-bearing IETF disclosures; the Opus site cites outside counsel that Opus can be implemented without licensing them. Vectis' press release says its pool does not target stand-alone software. Not legally verified."
+      },
+      "status": "low-risk-unverified"
+    },
+    {
+      "id": "av1",
+      "name": "AV1 (libaom kodlayıcı, dav1d çözücü; Electron içinde)",
+      "nameEn": "AV1 (libaom encoder, dav1d decoder; inside Electron)",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": "Alliance for Open Media Video Codec",
+      "where": {
+        "tr": "Electron'un ana ikilisinde (ölçüldü). Zeyvola şu an AV1 ile dışa aktarmıyor; içe aktarılan AV1 videolar çözülür.",
+        "en": "In Electron's main binary (measured). Zeyvola does not export AV1 yet; imported AV1 videos are decoded."
+      },
+      "license": {
+        "tr": "libaom: BSD-2-Clause + AOMedia Patent License 1.0; dav1d: BSD-2-Clause (\"dav1d is an AV1 decoder :)\" girişi)",
+        "en": "libaom: BSD-2-Clause + AOMedia Patent License 1.0; dav1d: BSD-2-Clause (entry \"dav1d is an AV1 decoder :)\")"
+      },
+      "patent": {
+        "tr": "AOMedia telifsiz patent lisansı var; Sisvel'in ücretli bir AV1 havuzu da var. Düşük risk, hukuken doğrulanmadı.",
+        "en": "The AOMedia royalty-free patent license exists; Sisvel also runs a paid AV1 pool. Low risk, not legally verified."
+      },
+      "status": "low-risk-unverified"
+    },
+    {
+      "id": "containers",
+      "name": "MP4 ve WebM kapsayıcı yazıcıları",
+      "nameEn": "MP4 and WebM container writers",
+      "profiles": [
+        "mp4",
+        "webm",
+        "webm-vp8"
+      ],
+      "chromiumTitle": null,
+      "where": {
+        "tr": "Zeyvola'nın kendi kodu (packages/media-web). MP4 yalnızca H.264 + AAC, WebM VP9 (deneysel dağıtımda VP8) + Opus taşır.",
+        "en": "Zeyvola's own code (packages/media-web). MP4 carries only H.264 + AAC, WebM carries VP9 (VP8 in the experimental build) + Opus."
+      },
+      "license": {
+        "tr": "Zeyvola'nın kendi kodu (PolyForm Shield License 1.0.0)",
+        "en": "Zeyvola's own code (PolyForm Shield License 1.0.0)"
+      },
+      "patent": {
+        "tr": "Matroska açık bir biçim (RFC 9559). ISO BMFF için bilinen aktif bir patent havuzu bulunamadı; doğrulanmadı.",
+        "en": "Matroska is an open format (RFC 9559). No active patent pool for ISO BMFF was found; not verified."
+      },
+      "status": "low-risk-unverified"
+    }
+  ]
+}

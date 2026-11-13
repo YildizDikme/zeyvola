@@ -1,0 +1,32 @@
+{
+ "electron": "44.8.0",
+ "chromium": "152.0.7977.167",
+ "binaryVersionString": "git-2026-07-15-6cfe2122b0",
+ "revision": "2b68d2babae73714846961fb0ee47e3b3d2e39a9",
+ "tree": "c60e6b597c312801ce91d81110442d40fbf4d672",
+ "revisionDate": "Thu Jul 16 02:28:48 2026",
+ "archive": {
+  "file": "chromium-ffmpeg-2b68d2babae7.tar.gz",
+  "bytes": 18817492,
+  "sha256": "9c5acae6727f27696abd25e27ead015a73e9e896763de442cb4311a85e63e9e7",
+  "url": "https://chromium.googlesource.com/chromium/third_party/ffmpeg/+archive/2b68d2babae73714846961fb0ee47e3b3d2e39a9.tar.gz"
+ },
+ "electronPatches": [
+  {
+   "name": ".patches",
+   "bytes": 28,
+   "sha256": "eb2ff86699f3aa0f6ac1b484a8c8a117a3149465273699e136e132024e38e7c6"
+  },
+  {
+   "name": "link_with_loader_path.patch",
+   "bytes": 1219,
+   "sha256": "bc6cdc29ad4ec2641dd59b4c3a25375b9166c35e202e5122cb73190885ec647d"
+  }
+ ],
+ "buildArgsSha256": "17335efaaf176bdbc1e329206ff610591b7fab0082b6ff267d567416d7611327",
+ "bundle": {
+  "file": "zeyvola-ffmpeg-lgpl-source-electron-44.8.0.tar.gz",
+  "bytes": 18622356,
+  "sha256": "e27f4e028e405143ddf7cee3afb917c94e8a24c42e0cddc6cd9500cceabc0d00"
+ }
+}

@@ -1,0 +1,13 @@
+{
+  "$comment": "Windows paketindeki Microsoft d3dcompiler_47.dll için iki karar. İkisi de boşken tools/codec-audit.mjs Windows paketinde yayın engeli verir. legalReview: kullanıcı koşulları metninin (tools/notices-supplement/MICROSOFT-D3DCOMPILER-TERMS.txt) hukuki incelemesi (kim, tarih). indemnity: Windows SDK lisansı, dağıtan kişinin Microsoft'u dağıtım ve kullanımla ilgili taleplere karşı tazmin etmesini, savunmasını ve zarardan korumasını şart koşar; bu yükümlülüğü lisans verenin bilerek kabul ettiği (kim, tarih). Bu alanları yalnızca lisans veren doldurur.",
+  "termsVersion": "2026-10-17",
+  "termsFile": "tools/notices-supplement/MICROSOFT-D3DCOMPILER-TERMS.txt",
+  "sdkLicense": {
+    "url": "https://aka.ms/WinSDKLicenseURL",
+    "fetched": "2026-10-17",
+    "sha256": "dd07eb178e00c6bba4148457fc00ff77cd4887eb521d504186fe59c9ec8bbe62",
+    "note": "Microsoft'un çevrim içi Windows SDK lisansı (RTF). Electron'un getirdiği DLL 10.0.26100 SDK'sından; o SDK kurulumundaki lisans metniyle karşılaştırılmadı."
+  },
+  "legalReview": null,
+  "indemnity": null
+}

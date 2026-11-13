@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Zeyvola Pencere Testi</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #101418; color: #e8eef4; font: 16px -apple-system, sans-serif; overflow: hidden; user-select: none; }
+  #info { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 22px; }
+  .t { position: absolute; width: 96px; height: 96px; border: 3px solid #3a4652; border-radius: 12px; display: grid; place-items: center; font-size: 28px; }
+  .t.on { border-color: #ffd400; background: #2b2a12; }
+</style>
+<div id="info"></div>
+<div class="t" data-i="0" style="left:6%;top:8%">1</div>
+<div class="t" data-i="1" style="right:6%;top:8%">2</div>
+<div class="t" data-i="2" style="left:6%;bottom:8%">3</div>
+<div class="t" data-i="3" style="right:6%;bottom:8%">4</div>
+<div class="t" data-i="4" style="left:calc(50% - 48px);top:22%">5</div>
+<script>
+  const { ipcRenderer } = require('electron');
+  const targets = [...document.querySelectorAll('.t')];
+  ipcRenderer.on('step', (_e, s) => {
+    targets.forEach((t, i) => t.classList.toggle('on', i === s.target));
+    document.getElementById('info').textContent = `Adım ${s.n}/${s.of}: sarı kareye ${s.button === 2 ? 'SAĞ' : 'SOL'} tıklayın`;
+  });
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('mousedown', (e) => {
+    const t = e.target.closest('.t');
+    ipcRenderer.send('click', { target: t ? Number(t.dataset.i) : -1, button: e.button, screenX: e.screenX, screenY: e.screenY, epochMs: Date.now() });
+  });
+</script>

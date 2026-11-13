@@ -1,0 +1,35 @@
+{
+  "$comment": "Electron'un paketlerinde bulunup Electron'un LICENSES.chromium.html dosyasında yer almayan bileşenler (2026-10-17'de paketteki her ikili dosya bildirimle eşleştirilerek bulundu). Lisans metinleri resmi depolardan, değiştirilmeden alındı; d3dcompiler satırının metni ise Windows SDK lisansının son kullanıcıya aktarılması gereken korumalarıdır (Zeyvola için yazıldı, hukuki inceleme bekliyor: tools/windows-terms.json). 'files': paket kökünden yol kalıpları; tools/codec-audit.mjs bu dosyaların bildirimi olduğunu denetler.",
+  "rows": [
+    {
+      "id": "mantle",
+      "name": "Mantle",
+      "platforms": ["darwin"],
+      "files": ["Zeyvola.app/Contents/Frameworks/Mantle.framework/"],
+      "version": "Electron'un kendi derlemesi (com.electron.mantle), Squirrel.Mac bağımlılığı",
+      "license": "MIT; Proton bölümleri BSD",
+      "licenseFile": "Mantle-LICENSE.md",
+      "source": "https://github.com/Mantle/Mantle/blob/ed1a76b493/LICENSE.md (lisans dosyası 2015-03-21'den beri değişmedi)"
+    },
+    {
+      "id": "reactiveobjc",
+      "name": "ReactiveObjC",
+      "platforms": ["darwin"],
+      "files": ["Zeyvola.app/Contents/Frameworks/ReactiveObjC.framework/"],
+      "version": "3.1.0 (Electron'un derlemesi, com.electron.reactive), Squirrel.Mac bağımlılığı",
+      "license": "MIT",
+      "licenseFile": "ReactiveObjC-LICENSE.md",
+      "source": "https://github.com/ReactiveCocoa/ReactiveObjC/blob/3.1.0/LICENSE.md"
+    },
+    {
+      "id": "d3dcompiler",
+      "name": "Microsoft Direct3D HLSL Compiler (d3dcompiler_47.dll)",
+      "platforms": ["win32"],
+      "files": ["d3dcompiler_47.dll"],
+      "version": "10.0.26100.7705 (Windows SDK 10.0.26100, \"Direct3D HLSL Compiler for Redistribution\")",
+      "license": "Microsoft yazılımı; Windows SDK lisans koşullarındaki dağıtılabilir kod (Distributable Code) olarak Electron ile gelir. Zeyvola bu dosyanın sahibi değildir ve Zeyvola'nın lisansı bu dosyaya uygulanmaz. Windows SDK lisansı dağıtanın son kullanıcıları koruyucu koşullara bağlamasını şart koşar; bu koşullar aşağıdadır ve Windows'ta ilk açılışta kabul edilir. © Microsoft Corporation.",
+      "licenseFile": "MICROSOFT-D3DCOMPILER-TERMS.txt",
+      "source": "Windows SDK lisansı: https://aka.ms/WinSDKLicenseURL ; yan yana dağıtım: https://learn.microsoft.com/en-us/windows/win32/directx-sdk--august-2009- (sistem bileşeni değildir)"
+    }
+  ]
+}

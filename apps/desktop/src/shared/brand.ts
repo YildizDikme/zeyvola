@@ -1,0 +1,10 @@
+export const APP_NAME = 'Zeyvola';
+export const APP_VERSION = '0.1.0';
+export const DEVELOPER = 'Yıldız Dikme';
+export const DEVELOPER_ROLE = 'Independent Software Developer';
+export const COPYRIGHT = 'Copyright © 2026 Yıldız Dikme';
+export const LICENSE_NAME = 'PolyForm Shield License 1.0.0';
+export const SOURCE_URL = 'https://github.com/YildizDikme/zeyvola';
+export const PROJECTS_FOLDER = 'Zeyvola Projeleri';
+export const MEDIA_SCHEME = 'zeyvola-media';
+export const PROJECT_FILE = 'project.json';

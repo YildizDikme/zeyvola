@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.zeyvola.recorder</string>
+	<key>CFBundleName</key>
+	<string>Zeyvola Kayıt Yardımcısı</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Zeyvola, kamera görüntünüzü ekrandan ayrı kaydetmek için kameraya erişir.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Zeyvola, sesinizi kaydetmek için mikrofona erişir.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Zeyvola, bilgisayarın sesini ekran kaydına eklemek için sistem sesine erişir.</string>
+</dict>
+</plist>
