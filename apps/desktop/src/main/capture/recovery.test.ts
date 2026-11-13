@@ -75,6 +75,16 @@ describe('rebuilding a recording', () => {
     expect(rec.markers).toEqual([secondsToTicks(2)]);
   });
 
+  it('keeps the display shape of a screen whose frames came back squeezed (browser path)', () => {
+    const squeezed = { ...SCREEN, width: 1024, height: 576, displayAspect: 4 / 3 };
+    const r = rebuildRecording(input(parseSessionLog(lines(HEADER, squeezed, MIC))!))!;
+    expect(r.recording.sources.screen!.displayAspect).toBeCloseTo(4 / 3);
+    // Only for the screen, only sensible values; an ordinary log stays without the field.
+    const bad = parseSessionLog(lines(HEADER, { ...SCREEN, displayAspect: 'x' }, { ...MIC, displayAspect: 2 }))!;
+    expect(bad.tracks.every((t) => t.displayAspect === undefined)).toBe(true);
+    expect('displayAspect' in rebuildRecording(input(crashLog()))!.recording.sources.screen!).toBe(false);
+  });
+
   it('uses the helper\'s own end time when it closed the files itself', () => {
     const log = parseSessionLog(lines(HEADER, SCREEN, MIC, { e: 'end', durationMs: 5003.2 }))!;
     const r = rebuildRecording(input(log, [{ name: 'screen.mp4', durationMs: 4995 }, { name: 'mic.m4a', durationMs: 4992 }]))!;

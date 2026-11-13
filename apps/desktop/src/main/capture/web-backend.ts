@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { desktopCapturer, screen, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import type { MediaSource, SourceKind } from '@zeyvola/project-model';
 import { msToTicks } from '@zeyvola/timing';
+import { displayAspectFor } from '../../shared/display-frame';
 import { trackSpan } from '../../shared/track-start';
 import type { BackendInfo } from '@zeyvola/protocol';
 import { removeQuiet } from '../fsutil';
@@ -197,8 +198,20 @@ export class WebCaptureBackend extends EventEmitter implements CaptureBackend {
     this.log({
       e: 'track', kind: f.kind, name: f.name, mime: f.mime.split(';')[0]!,
       startOffsetMs: trackSpan(m.firstFrameMs, this.clock.startedAt, 0).startOffsetMs,
-      width: m.width, height: m.height, fps: m.fps, sampleRate: m.sampleRate, channels: m.channels,
+      width: m.width, height: m.height, ...this.shapeOf(f.kind, m), fps: m.fps, sampleRate: m.sampleRate, channels: m.channels,
     });
+  }
+
+  /**
+   * MediaSource.displayAspect for a screen track whose frames did not keep the display's shape
+   * (shared/display-frame.ts); empty otherwise. The capture window has already asked the
+   * browser again; what remains is drawn with the display's shape instead of being refused.
+   */
+  private shapeOf(kind: SourceKind, m: { width?: number; height?: number }): { displayAspect?: number } {
+    if (kind !== 'screen' || !this.args) return {};
+    const b = this.args.displayBounds;
+    const displayAspect = displayAspectFor(this.args.config.target.kind, { width: b.w, height: b.h }, { width: m.width, height: m.height });
+    return displayAspect ? { displayAspect } : {};
   }
 
   // ─── Messages from the capture window ─────────────────────────────────────
@@ -313,7 +326,7 @@ export class WebCaptureBackend extends EventEmitter implements CaptureBackend {
       const span = trackSpan(m.firstFrameMs, this.clock.startedAt, durationMs);
       sources[f.kind] = {
         kind: f.kind, file: rel(f.name), mime: f.mime.split(';')[0]!,
-        width: m.width, height: m.height, fps: m.fps, sampleRate: m.sampleRate, channels: m.channels,
+        width: m.width, height: m.height, ...this.shapeOf(f.kind, m), fps: m.fps, sampleRate: m.sampleRate, channels: m.channels,
         startOffset: msToTicks(span.startOffsetMs),
         duration: msToTicks(span.durationMs),
       };

@@ -70,6 +70,10 @@ export function Editor({ opened, onBack, notice: initialNotice, onNoticeShown }:
         const run = await runZoomSuggestions(store);
         // Said once on the first open; a notice already on screen (e.g. a recovered recording) stays.
         if (run.reason && !store.getState().notice) store.notify(noSuggestionMessage(run.reason), 12_000);
+        // The browser delivered the screen squeezed; it is shown with the display's real shape.
+        if (Object.values(p.recordings).some((r) => r.sources.screen?.displayAspect) && !store.getState().notice) {
+          store.notify(t("Ekran görüntüsü kayıtta basık geldi; ekranın gerçek oranıyla gösteriliyor. Bir yönde ayrıntı biraz az olabilir."), 12_000);
+        }
       }
       await saveThumbnail(store);
     })();

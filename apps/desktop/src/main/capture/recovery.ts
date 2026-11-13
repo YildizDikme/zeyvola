@@ -31,6 +31,8 @@ export interface SessionTrack {
   startOffsetMs: number;
   width?: number;
   height?: number;
+  /** MediaSource.displayAspect: the display's shape, when the screen frames did not keep it. */
+  displayAspect?: number;
   fps?: number;
   sampleRate?: number;
   channels?: number;
@@ -108,6 +110,7 @@ export function parseSessionLog(text: string): SessionLog | null {
         log.tracks.push({
           kind, name: v.name, mime: v.mime.slice(0, 120), startOffsetMs: v.startOffsetMs,
           width: optNum(v.width), height: optNum(v.height), fps: optNum(v.fps), sampleRate: optNum(v.sampleRate), channels: optNum(v.channels),
+          ...(kind === 'screen' && finite(v.displayAspect) && v.displayAspect > 0.1 && v.displayAspect < 10 ? { displayAspect: v.displayAspect } : {}),
         });
         break;
       }
@@ -162,7 +165,7 @@ export function rebuildRecording(input: RebuildInput): Rebuilt | null {
     if (!p || p.error || !finite(p.durationMs) || p.durationMs <= 0 || !input.files.includes(t.name)) continue;
     sources[t.kind] = {
       kind: t.kind, file: rel(t.name), mime: t.mime,
-      width: t.width ?? p.width, height: t.height ?? p.height, fps: t.fps,
+      width: t.width ?? p.width, height: t.height ?? p.height, ...(t.displayAspect ? { displayAspect: t.displayAspect } : {}), fps: t.fps,
       sampleRate: t.sampleRate ?? p.sampleRate, channels: t.channels ?? p.channels,
       // Negative: audio captured just before the clock started (browser path, track-start.ts).
       startOffset: msToTicks(Math.max(-1000, t.startOffsetMs)), duration: msToTicks(p.durationMs),

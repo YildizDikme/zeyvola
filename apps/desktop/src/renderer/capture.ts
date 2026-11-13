@@ -8,6 +8,7 @@ import { acquire, warmUpCamera } from './capture-devices';
 import { initI18n, t } from './i18n';
 import { PROFILE } from '../shared/distribution';
 import { FrameWatch } from './frame-watch';
+import { checkFrame, correctionConstraints, displayVideoConstraints, type PixelSize } from '../shared/display-frame';
 
 interface StartMessage {
   config: CaptureConfig;
@@ -93,6 +94,76 @@ async function record(kind: Kind, stream: MediaStream, watch: FrameWatch, config
   return a;
 }
 
+type Processor = new (init: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrame> };
+
+/**
+ * Size of the frames the track really delivers: read from a copy of it (the settings can be
+ * stale right after a change). Frames are taken for `settleMs` and the last one counts, so a
+ * size change after applyConstraints is seen. Falls back to the settings.
+ */
+async function deliveredSize(track: MediaStreamTrack, settleMs = 400): Promise<Partial<PixelSize>> {
+  const fromSettings = () => { const st = track.getSettings(); return { width: st.width, height: st.height }; };
+  const P = (globalThis as { MediaStreamTrackProcessor?: Processor }).MediaStreamTrackProcessor;
+  if (!P) return fromSettings();
+  const copy = track.clone();
+  const reader = new P({ track: copy }).readable.getReader();
+  let size: Partial<PixelSize> | null = null;
+  const until = performance.now() + settleMs;
+  const giveUp = performance.now() + 3000; // no frame at all: judge by the settings
+  try {
+    while (!size || performance.now() < until) {
+      // A still screen may send no further frames: wait only until the deadline.
+      const left = (size ? until : giveUp) - performance.now();
+      if (left <= 0) break;
+      const r = await Promise.race([reader.read().catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), left))]);
+      if (!r || r.done) break;
+      size = { width: r.value.displayWidth, height: r.value.displayHeight };
+      r.value.close();
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined);
+    copy.stop();
+  }
+  return size ?? fromSettings();
+}
+
+/**
+ * Asks the screen track again with stricter constraints when its frames do not have the
+ * display's shape (shared/display-frame.ts). Recording goes on either way: if the shape stays
+ * wrong, main stores the display's shape with the source (MediaSource.displayAspect) from the
+ * track's size, and the picture is drawn with it.
+ *
+ * One line goes to the console for test runs (`--enable-logging`): what the browser offered and
+ * delivered, and which correction helped. Sizes only; nothing about the screen's content.
+ */
+async function ensureShape(track: MediaStreamTrack, kind: CaptureConfig['target']['kind'], display: PixelSize, fps: number): Promise<void> {
+  const first = await deliveredSize(track, 0);
+  const report: Record<string, unknown> = {
+    kind, display, capabilities: sizeOnly(track.getCapabilities?.() ?? {}), settings: sizeOnly(track.getSettings()), firstFrame: first, attempts: [] as unknown[],
+  };
+  let check = checkFrame(kind, display, first);
+  for (const [i, c] of correctionConstraints(display, fps).entries()) {
+    if (check.ok) break;
+    let frame: Partial<PixelSize> | null = null;
+    let error: string | null = null;
+    try {
+      await track.applyConstraints(c);
+      frame = await deliveredSize(track, 600);
+      check = checkFrame(kind, display, frame);
+    } catch (e) { error = (e as Error).name; }
+    (report.attempts as unknown[]).push({ attempt: i + 1, error, frame, settings: sizeOnly(track.getSettings()), ok: check.ok });
+  }
+  report.ok = check.ok;
+  console.info(`[zeyvola:capture-shape] ${JSON.stringify(report)}`);
+}
+
+/** The size-related fields of track settings or capabilities. */
+function sizeOnly(o: object): Record<string, unknown> {
+  const r: Record<string, unknown> = {};
+  for (const k of ['width', 'height', 'aspectRatio', 'resizeMode', 'frameRate'] as const) if (k in o) r[k] = (o as Record<string, unknown>)[k];
+  return r;
+}
+
 const onBusy = (device: 'camera' | 'mic') => bridge.invoke('cw:busy', { device }).then(() => undefined);
 let prepared: { items: [Kind, MediaStream][]; config: CaptureConfig; pixels: number; watches: FrameWatch[] } | null = null;
 
@@ -101,10 +172,13 @@ bridge.on('cw:prepare', async (raw) => {
   const msg = raw as StartMessage;
   const { config } = msg;
   try {
+    const display = { width: msg.pixelWidth, height: msg.pixelHeight };
     const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: msg.pixelWidth }, height: { ideal: msg.pixelHeight }, frameRate: { ideal: config.fps, max: config.fps } },
+      video: displayVideoConstraints(config.target.kind, display, config.fps),
       audio: msg.systemAudio,
     });
+    const screenTrack = screenStream.getVideoTracks()[0];
+    if (screenTrack) await ensureShape(screenTrack, config.target.kind, display, config.fps);
     const items: [Kind, MediaStream][] = [['screen', new MediaStream(screenStream.getVideoTracks())]];
     const sys = screenStream.getAudioTracks();
     if (sys.length) items.push(['system', new MediaStream(sys)]);

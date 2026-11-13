@@ -17,8 +17,16 @@ export interface MediaSource {
   /** Path relative to the project folder. */
   file: string;
   mime: string;
+  /** Size of the file's frames in pixels. */
   width?: number;
   height?: number;
+  /**
+   * Shape (width / height) the picture really has, when the file's frames do not have it: the
+   * browser recording path on Windows was measured squeezing a 4:3 display into 16:9 frames.
+   * The squeeze is a scale along one axis, so drawing the frames with this shape undoes it.
+   * Absent (older projects, and every undistorted recording): the frames' own shape.
+   */
+  displayAspect?: number;
   fps?: number;
   sampleRate?: number;
   channels?: number;

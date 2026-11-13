@@ -5,6 +5,7 @@ import {
   setZoomSensitivity, timelineToSource, updateCameraLayout, updateMagnifier, updatePrivacy, updateVariant, updateZoom,
   type Background, type CameraLayout, type CameraShape, type DeepPartial, type Easing, type MagnifierShape, type MagnifierStyle,
   type PrivacyEffect, type Project, type Transition, type ZoomItem,
+  pictureAspect,
 } from '@zeyvola/project-model';
 import { TICKS_PER_SECOND, formatTimecode, msToTicks, secondsToTicks, ticksToMs } from '@zeyvola/timing';
 import type { Player } from '../../playback/player';
@@ -73,7 +74,7 @@ function TransitionEditor({ label, value, onChange }: { label: string; value: Tr
 function ZoomTarget({ store, player, item }: { store: EditorStore; player: Player; item: ZoomItem }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const rec = store.project.recordings[item.recordingId];
-  const aspect = rec?.sources.screen?.width && rec.sources.screen.height ? rec.sources.screen.width / rec.sources.screen.height : 16 / 10;
+  const aspect = pictureAspect(rec?.sources.screen) ?? 16 / 10;
   useEffect(() => {
     const c = ref.current;
     const v = player.elementsFor(item.recordingId)?.screen;

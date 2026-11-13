@@ -5,7 +5,7 @@ import { MAGNIFIER_LIMITS } from './factory';
 import { clamp01, fitAspect, lerp, lerpRect, logLerp, type Rect, type Vec2 } from './geometry';
 import { layoutSegments, timelineToSource, type SegmentPlacement } from './mapping';
 import type {
-  Background, CameraLayout, CameraLayoutItem, FrameStyle, Hex, ID, PrivacyEffect, PrivacyItem,
+  Background, CameraLayout, CameraLayoutItem, FrameStyle, Hex, ID, MediaSource, PrivacyEffect, PrivacyItem,
   Project, Recording, Variant, ZoomItem,
 } from './types';
 
@@ -104,11 +104,21 @@ export function resolvedBaseCamera(project: Project, variant: Variant): CameraLa
   return { ...project.style.camera, ...variant.cameraOverride };
 }
 
+/**
+ * Shape (width / height) a source's picture is shown with: its recorded display shape when the
+ * frames were distorted (MediaSource.displayAspect), else the frames' own shape; null if unknown.
+ */
+export function pictureAspect(s: MediaSource | undefined): number | null {
+  if (s?.displayAspect && Number.isFinite(s.displayAspect) && s.displayAspect > 0) return s.displayAspect;
+  return s?.width && s?.height ? s.width / s.height : null;
+}
+
 function sourceAspect(rec: Recording | undefined, kind: 'screen' | 'camera', fallback: number): number {
-  const s = rec?.sources[kind];
-  if (!s?.width || !s?.height) return fallback;
+  const aspect = pictureAspect(rec?.sources[kind]);
+  if (aspect === null) return fallback;
+  // A region is a crop of the display, in normalized display coordinates.
   const crop = kind === 'screen' ? rec?.capture.crop : undefined;
-  return crop ? (s.width * crop.w) / (s.height * crop.h) : s.width / s.height;
+  return crop ? (aspect * crop.w) / crop.h : aspect;
 }
 
 const FULL_CROP: Rect = { x: 0, y: 0, w: 1, h: 1 };

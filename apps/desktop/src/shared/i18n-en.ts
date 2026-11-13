@@ -51,6 +51,7 @@ export const EN: Record<string, string> = {
   "Bitir": "Finish",
   "İptal": "Cancel",
   "Kayıt hazırlanamadı: {msg}": "Could not prepare the recording: {msg}",
+  "Ekran görüntüsü kayıtta basık geldi; ekranın gerçek oranıyla gösteriliyor. Bir yönde ayrıntı biraz az olabilir.": "The screen picture arrived squeezed in this recording; it is shown with the screen's real shape. It may have a little less detail in one direction.",
   "Kaynaklar hazır değil": "Sources are not ready",
   "Kayıt başlatılamadı: {msg}": "Could not start recording: {msg}",
   "donanım": "hardware",
