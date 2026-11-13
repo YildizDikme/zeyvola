@@ -1,14 +1,17 @@
 # Zeyvola
 
-macOS için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera, mikrofon ve sistem sesi ayrı izlere kaydedilir. Kayıttan sonra zaman çizelgesinde zoom, kamera yerleşimi, gizleme ve tema düzenlenir.
+macOS ve Windows (Beta) için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera, mikrofon ve sistem sesi ayrı izlere kaydedilir. Kayıttan sonra zaman çizelgesinde zoom, kamera yerleşimi, gizleme ve tema düzenlenir.
 
-*Screen recording and video editing for macOS. Screen, camera, microphone and system audio are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
+*Screen recording and video editing for macOS and Windows (beta). Screen, camera, microphone and system audio are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
 
-> Sürüm 0.1, ilk genel sürüm. Şimdilik **macOS** (Apple Silicon ve Intel). Windows sürümü **test ediliyor, henüz yayımlanmadı**; gerçek Windows'ta doğrulanana kadar yayımlanmayacak.
-> *Version 0.1, the first public release. For now **macOS** only (Apple silicon and Intel). The Windows version is **being tested and not released yet**; it will not be published until it is verified on real Windows.*
+> Sürüm 0.1, ilk genel sürüm: **macOS** (Apple Silicon ve Intel) ve **Windows 10/11 (Beta)**. Windows sürümü GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. Bilinen riskler: [Windows Beta](#windows-beta-bilinen-riskler--known-risks).
+> *Version 0.1, the first public release: **macOS** (Apple silicon and Intel) and **Windows 10/11 (beta)**. The Windows version: it passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet.*
 >
-> Kayıt, macOS kayıt yardımcısıyla (ScreenCaptureKit) yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür.
+> macOS'ta kayıt, macOS kayıt yardımcısıyla (ScreenCaptureKit) yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür.
 > *Recording uses the macOS recording helper (ScreenCaptureKit): system audio goes to its own track and the cursor is kept out of the video. With the "Fallback" (browser) method on the recording screen, system audio is not recorded and the cursor is part of the video.*
+>
+> Windows'ta kayıt tarayıcı yoluyla yapılır: sistem sesi kaydedilebilir, imleç videoya gömülür.
+> *On Windows, recording goes through the browser engine: system audio can be recorded and the cursor is part of the video.*
 
 ## Özellikler / Features
 - Ekran, kamera, mikrofon ve sistem sesi kaydı (ayrı izler)
@@ -51,7 +54,7 @@ Sürümler GitHub **Releases** sayfasında yayımlanır. Bilgisayarınıza uyan 
 |---|---|---|
 | Apple Silicon Mac (M1, M2, M3, M4 …) | `Zeyvola-<sürüm>-macos-arm64.dmg` (ya da `.zip`) | Yayımlanır / Released |
 | Intel işlemcili Mac / Intel Mac | `Zeyvola-<sürüm>-macos-x64.dmg` (ya da `.zip`) | Yayımlanır / Released (aşağıdaki nota bakın / see the note below) |
-| Windows 10 / 11 (64 bit, x64) | `Zeyvola-<sürüm>-windows-x64.zip` | **Test ediliyor, henüz yayımlanmadı** / **Being tested, not released yet** |
+| Windows 10 / 11 (64 bit, x64) | `Zeyvola-<sürüm>-windows-x64.zip` | **Beta**: GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. / *It passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet.* |
 
 Her sürümde ayrıca FFmpeg kaynak kodu paketi (`zeyvola-ffmpeg-lgpl-source-electron-<sürüm>.tar.gz`, LGPL-2.1, bkz. *Üçüncü taraf yazılımlar*) ve `SHA256SUMS.txt` bulunur. Uygulamayı kullanmak için bunlara gerek yoktur.
 
@@ -94,16 +97,22 @@ Get-FileHash .\Zeyvola-<sürüm>-windows-x64.zip                  # Windows (Pow
 *Open the `.dmg` and drag **Zeyvola** onto the **Applications** shortcut next to it (from the `.zip`: move `Zeyvola.app` into **Applications**), then open it from **Applications**. Zeyvola is not signed with an Apple Developer ID or notarized, so macOS blocks the first launch. On macOS 15 and later, try to open it once, close the warning, then go to **System Settings › Privacy & Security** (you may need to scroll), click **Open Anyway** for Zeyvola in the **Security** section and enter your login password; Apple says the button is shown for about an hour after the attempt. On macOS 14 and earlier, right-click (or Control-click) the app, choose **Open**, then **Open** again. This is needed on the first launch and may be needed again after downloading a new version. Zeyvola needs macOS 13 (Ventura) or later.*
 
 ### Windows'ta kurulum / Installing on Windows
-> Windows sürümü **test ediliyor, henüz yayımlanmadı**. Aşağıdaki adımlar yayımlandığında geçerli olacaktır.
-> *The Windows version is **being tested and not released yet**. These steps apply once it is released.*
+> Windows sürümü **Beta**: GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. Önce aşağıdaki bilinen riskleri okuyun. Gerçek bir bilgisayarda deneyip sonucu bildirmek isterseniz: [Windows deneme listesi](docs/windows-deneme-listesi.md).
+> *The Windows version is a **beta**: it passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet. Read the known risks below first. To try it on a real computer and report back, see the [Windows test checklist](docs/windows-deneme-listesi.md) (in Turkish).*
 
 1. `.zip` dosyasını kalıcı bir klasöre çıkarın (Dosya Gezgini'nde zip'e sağ tıklayıp *Extract All* / tümünü çıkar). Uygulamayı zip'in içinden çalıştırmayın: çalışmak için yanındaki dosyalara ihtiyaç duyar.
 2. Çıkan klasörde `Zeyvola\Zeyvola.exe` dosyasını açın. İsterseniz masaüstüne ya da Başlat menüsüne kısayol oluşturabilirsiniz.
-3. Zeyvola kod imzası olmadan dağıtıldığı için Microsoft Defender SmartScreen **"Windows kişisel bilgisayarınızı korudu"** uyarısını gösterebilir. **Ek bilgi**'ye, sonra **Yine de çalıştır**'a tıklayın. Kurumsal bilgisayarlarda yönetici politikası bu adımı kapatmış olabilir.
+3. Zeyvola kod imzası olmadan dağıtıldığı için Microsoft Defender SmartScreen **"Windows bilgisayarınızı korudu"** (*Windows protected your PC*) uyarısını gösterebilir. **Ek bilgi**'ye (*More info*), sonra **Yine de çalıştır**'a (*Run anyway*) tıklayın. Kurumsal bilgisayarlarda yönetici politikası bu adımı kapatmış olabilir.
 4. **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de bu özellik açıksa (**Windows Güvenliği › Uygulama ve tarayıcı denetimi**), Microsoft'a göre imzasız uygulamaları engeller ve tek bir uygulama için istisna tanımlanamaz. Bu durumda Zeyvola hiç açılmayabilir. Özelliği kapatıp kapatmamak sizin kararınızdır; kapatmak bütün bilgisayarın korumasını etkiler.
 5. **İlk açılışta Microsoft bileşeni koşulları:** Zeyvola'nın Windows sürümü, görüntü işleme için Microsoft'a ait `d3dcompiler_47.dll` dosyasını içerir. Microsoft bu dosyanın ancak kullanıcı koşullarını kabul ederse dağıtılmasına izin verir; bu yüzden ilk açılışta, herhangi bir pencere açılmadan önce koşullar sorulur. Koşullar yalnızca bu dosya için geçerlidir ve Zeyvola'nın kendi lisansını değiştirmez. **Koşulları oku** tam metni açar (zip'te de `MICROSOFT-D3DCOMPILER-TERMS.txt` olarak bulunur). **Kabul ediyorum** derseniz Zeyvola bunu hatırlar ve bir kez kendiliğinden yeniden başlar; dosya pakette `d3dcompiler_47.dll.terms-pending` adıyla gelir ve ancak kabulden sonra asıl adını alır (bunun için uygulama klasörüne yazma izni gerekir). **Kabul etmiyorum** derseniz Zeyvola kapanır; bir sonraki açılışta koşullar yeniden sorulur.
 
 *Extract the `.zip` to a permanent folder (right-click › Extract All in File Explorer); do not run the app from inside the zip, it needs the files next to it. Open `Zeyvola\Zeyvola.exe`. Zeyvola is distributed without a code signature, so Microsoft Defender SmartScreen may show "Windows protected your PC": click **More info**, then **Run anyway** (company policy may block this). On Windows 11, if Smart App Control is on (Windows Security › App & browser control), Microsoft says it blocks unsigned apps and cannot make an exception for a single app, so Zeyvola may not start at all; turning it off is your decision and affects the whole computer. On first launch, before any window opens, Zeyvola asks you to accept Microsoft's terms for `d3dcompiler_47.dll` (a Microsoft file used for graphics, shipped with the Windows version). They cover only that file and do not change Zeyvola's own license. **Read terms** opens the full text (also `MICROSOFT-D3DCOMPILER-TERMS.txt` in the zip). After **Accept**, Zeyvola remembers it and restarts once; after **Decline**, it quits and asks again next time.*
+
+#### Windows Beta: bilinen riskler / Known risks
+- **SmartScreen:** Uygulama imzasız olduğu için ilk açılışta uyarı çıkar. **Ek bilgi › Yine de çalıştır** ile açın (yukarıdaki 3. adım). *Unsigned, so SmartScreen warns on first launch: choose **More info › Run anyway**.*
+- **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de açıksa imzasız uygulamaları engeller; Zeyvola hiç açılmaz. Tek uygulama için istisna yoktur; özelliği kapatıp kapatmamak sizin kararınızdır (4. adım). *If Smart App Control is on in Windows 11, Zeyvola will not run at all; there is no per-app exception, and turning it off is your call.*
+- **Windows N sürümleri:** Bu sürümlerde Microsoft'un medya bileşenleri yoktur; MP4 yerine WebM olarak kaydedilmesi beklenir (henüz denenmedi). **Ayarlar › Uygulamalar › İsteğe bağlı özellikler** altından *Media Feature Pack*'i ekleyin. *N editions lack Microsoft's media components, so MP4 export is expected to fall back to WebM (not tried yet); add the Media Feature Pack under Settings › Apps › Optional features.*
+- **Ekran kartı olmayan bilgisayarlarda H.264 önizleme:** Donanım video çözücüsü olmayan bilgisayarlarda (ör. bazı sanal makineler) içe aktarılan H.264 videoların (MP4, MOV) önizlemesi çalışmayabilir. Zeyvola'nın kendi kayıtları WebM olduğu için bundan etkilenmez; sorun olursa videonun WebM kopyasını ekleyin. *Without a hardware video decoder (e.g. some virtual machines), imported H.264 videos (MP4, MOV) may not preview; Zeyvola's own recordings are not affected, and a WebM copy of the video works.*
 
 ### İzinler / Permissions
 **macOS.** Zeyvola her izni ilk gerektiğinde ister; vermediğiniz izinleri sonradan **Sistem Ayarları › Gizlilik ve Güvenlik** altında açabilirsiniz:
@@ -138,6 +147,7 @@ Dışa aktardığınız videolar, kaydederken seçtiğiniz klasördedir ve kald�
 - **macOS "Yine de Aç" düğmesini göstermiyor:** Düğme, uygulamayı açmayı denedikten sonra yaklaşık bir saat görünür. Zeyvola'yı yeniden açmayı deneyin, sonra **Gizlilik ve Güvenlik**'e dönün. *The **Open Anyway** button appears for about an hour after you try to open the app; try again, then go back to **Privacy & Security**.*
 - **Ekran kaydı başlamıyor (macOS):** Ekran kaydı izni verilmemiş ya da güncellemeden sonra eski izin geçersiz kalmış olabilir; yukarıdaki *İzinler* bölümüne bakın. *Screen recording does not start (macOS): the permission is missing or went stale after an update; see* Permissions *above.*
 - **MP4 dışa aktarma:** MP4 (H.264 + AAC) işletim sisteminin kodlayıcısıyla yazılır. Windows'ta ekran kartının H.264 kodlayıcısı yoksa Windows'un kendi yazılım kodlayıcısı kullanılır; bu daha yavaştır. O da yoksa video WebM olarak kaydedilir ve Zeyvola bunu dışa aktarmadan önce ve sonra söyler ("MP4 yerine WebM olarak kaydedildi"). WebM her zaman seçilebilir. *MP4 is written with the operating system's encoder. On Windows without a hardware H.264 encoder, Windows' software encoder is used (slower); without that, the video is saved as WebM and Zeyvola tells you before and after the export ("Saved as WebM instead of MP4"). WebM is always available.*
+- **Windows'ta kayıt basık ya da uzamış geldi:** Bazı bilgisayarlarda ekran görüntüsü kayda farklı oranda gelir. Zeyvola bunu fark edip ekranın gerçek oranıyla gösterir ve bir uyarı verir ("Ekran görüntüsü kayıtta basık geldi…"); bir yönde ayrıntı biraz az olabilir. *On some computers the screen arrives squeezed; Zeyvola shows it with the display's real shape and says so, with slightly less detail in one direction.*
 - **Windows'ta uygulama hiç açılmıyor:** Akıllı Uygulama Denetimi açık olabilir (yukarıdaki 4. adım) ya da uygulama zip'in içinden çalıştırılmış olabilir (1. adım). *Smart App Control may be on (step 4), or the app was started from inside the zip (step 1).*
 
 ## Geliştirici / Developer

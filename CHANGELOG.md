@@ -6,9 +6,9 @@ Bu dosya Zeyvola'nın sürümlerindeki önemli değişiklikleri listeler.
 
 ## 0.1.0 — yayımlanmadı / unreleased
 
-İlk sürüm. macOS (Apple Silicon ve Intel). Windows sürümü test ediliyor, henüz yayımlanmadı.
+İlk sürüm. macOS (Apple Silicon ve Intel) ve Windows 10/11 x64 (Beta). Windows sürümü GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi.
 
-*First release. macOS (Apple silicon and Intel). The Windows version is being tested and not released yet.*
+*First release. macOS (Apple silicon and Intel) and Windows 10/11 x64 (beta). The Windows version: it passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet.*
 
 ### Özellikler / Features
 - Ekran, kamera, mikrofon ve sistem sesi kaydı (ayrı izler; macOS kayıt yardımcısı, ScreenCaptureKit). *Screen, camera, microphone and system audio recording on separate tracks (macOS recording helper, ScreenCaptureKit).*
