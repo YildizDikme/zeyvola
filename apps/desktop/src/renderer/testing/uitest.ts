@@ -24,6 +24,7 @@ import { Mp4Writer } from '@zeyvola/media-web';
 import { PROFILE, DIST } from '../../shared/distribution';
 import { api } from '../api';
 import { renderStill } from '../export/exporter';
+import { colorDistance, darkBands, findSquare, isFound, meanColor, type Pixels, type SquareFound } from './frame-measure';
 import type { EditorStore } from '../state/editor-store';
 import { avcProfileName, compareFrames, mp4Tracks, sharpness } from './mp4-stats';
 import { t } from '../i18n';
@@ -298,6 +299,9 @@ export async function runUiTest(): Promise<unknown> {
       ...(v ? { video: { codec: v.codec, profile: avcProfileName(v.avcProfile), level: v.avcLevel, kbps: Math.round(v.kbps), frames: v.samples } } : {}),
       ...(a ? { audio: { codec: a.codec, kbps: Math.round(a.kbps) } } : {}),
       quality, ...(mp4Unavailable ? { fallback: mp4Unavailable } : {}),
+      // The real recording test reads frames of its export the same way (grabFrame): does it work on
+      // this export of this machine? (Windows CI run 9 could not read the recording's WebM export.)
+      frameGrab: await grabFrame(exportedUrl(), expected() / 2).then((g) => ({ ok: true, size: `${g.px.width}×${g.px.height}`, reached: g.reached }), (e: Error) => ({ ok: false, error: e.message })),
     };
     if (route === 'mf') {
       expect(v?.codec === 'avc1' && a?.codec === 'mp4a', `Media Foundation dosyası H.264 + AAC değil: ${tracks.map((x) => x.codec).join(', ')}`);
@@ -403,54 +407,57 @@ export async function runUiTest(): Promise<unknown> {
       return realCapture.summary;
     });
     const rc = realCapture as RealCapture | null;
+    // The driver's known square (tests/real-capture-web/windows-clicks.ps1), measured in the real
+    // recording. Every check here stops a release: since Windows CI run 10 the recording is of the real
+    // display (run 9 showed the fake capture device's pattern instead, main.ts). Only a frame the test
+    // itself cannot read is reported as "not measured" (known issue).
+    if (rc && !rc.shape) {
+      checks.push({ name: 'Gerçek ekran kaydı: bilinen kare ölçülebildi', ok: false, detail: rc.shapeMissing ?? 'kare ölçümü yapılmadı' });
+    }
     if (rc?.shape) {
-      // A known square (the click driver's) keeps its shape and its place in the recording.
       const { expected: e, found: f, ratio, drawn } = rc.shape;
       const near = (a: number, b: number) => Math.abs(a - b) < 0.012;
-      // Position and size as fractions of the frame stay right even in squeezed frames; the shape is
-      // judged as the app draws it (frames with the display's shape, or displayAspect applied).
-      const where = f ? `ekranda x ${e.fx.toFixed(3)} y ${e.fy.toFixed(3)} g ${e.fw.toFixed(3)} y ${e.fh.toFixed(3)} · videoda x ${f.fx.toFixed(3)} y ${f.fy.toFixed(3)} g ${f.fw.toFixed(3)} y ${f.fh.toFixed(3)}` : '';
-      // The shape as the app draws it: a release blocker once the square is found.
+      const where = `ekranda x ${e.fx.toFixed(3)} y ${e.fy.toFixed(3)} g ${e.fw.toFixed(3)} y ${e.fh.toFixed(3)}${f ? ` · videoda x ${f.fx.toFixed(3)} y ${f.fy.toFixed(3)} g ${f.fw.toFixed(3)} y ${f.fh.toFixed(3)} (doluluk ${f.fill}, siyah çerçeve ${f.ring})` : ''}`;
+      // 1. The recording shows the desktop: the square is in the raw frame, at its place and size
+      //    (fractions of the screen and of the frame, so a squeezed frame keeps them).
+      const placed = !!f && near(f.fx, e.fx) && near(f.fy, e.fy) && near(f.fw, e.fw) && near(f.fh, e.fh);
       checks.push({
-        name: 'Gerçek ekran kaydı: ekrandaki bilinen kare kayıtta (uygulamanın çizdiği haliyle) kare kalır',
-        ok: !!f && drawn !== null && Math.abs(drawn - 1) < 0.02,
-        // Not found at all is a known issue for now (user decision 2026-11-13): it must not stop a release.
-        ...(!f ? { known: 'bilinen kare videoda bulunamadı; ölçüm sonra düzeltilecek' } : {}),
-        detail: !f ? `kare videoda bulunamadı · sürücü: ${JSON.stringify(rc.shape.driver)} · videoda o noktada: ${JSON.stringify(rc.shape.samples)}` : `çizilen en/boy ${drawn}, dosyanın karelerinde ${ratio}${rc.source?.displayAspect ? ` (displayAspect ${rc.source.displayAspect.toFixed(4)} saklandı)` : ''} (1 olmalı) · ${where}`,
+        name: 'Gerçek ekran kaydı: kayıt masaüstünü gösteriyor (ekrandaki bilinen kare ham karede, yeri ve boyutu ±0,012)',
+        ok: placed,
+        detail: f ? where : `kare kayıtta yok · ${where} · denenen anlar: ${JSON.stringify(rc.shape.samples)} · sürücü: ${JSON.stringify(rc.shape.driver)}`,
       });
-      // Place and size. Windows CI run 8: same centre, twice the size (the recording seemed to show the
-      // middle of the screen enlarged 2x). Known issue until checked on a real PC (user decision 2026-11-13).
+      // 2. A square stays a square: as the app draws it, and in the file itself unless the source
+      //    stored the display's shape (displayAspect: the file's frames are then known to be squeezed).
       if (f) {
-        const placed = near(f.fx, e.fx) && near(f.fy, e.fy) && near(f.fw, e.fw) && near(f.fh, e.fh);
+        const rawOk = ratio !== null && Math.abs(ratio - 1) < 0.02;
+        const drawnOk = drawn !== null && Math.abs(drawn - 1) < 0.02;
+        const stored = rc.source?.displayAspect;
         checks.push({
-          name: 'Gerçek ekran kaydı: bilinen karenin kayıttaki yeri ve boyutu ekrandakiyle aynı',
-          ok: placed,
-          ...(!placed ? { known: `kare kayıtta ${(f.fw / e.fw).toFixed(2)}× boyutta; kayıt ekranın bir bölümünü büyütüyor olabilir; gerçek PC'de doğrulanacak` } : {}),
-          detail: where,
+          name: 'Gerçek ekran kaydı: bilinen kare kare kalır (ham dosyada ve uygulamanın çizdiği halde en/boy 1 ± %2)',
+          ok: drawnOk && (rawOk || !!stored),
+          detail: `ham dosyada ${ratio}, çizilen ${drawn}${stored ? ` (displayAspect ${stored.toFixed(4)} saklandı: ham karelerin sıkışık olduğu biliniyor, ham oran yalnızca raporlanır)` : ''} · ${where}`,
         });
       }
-      // Colours: the square's colour in the recording against what the driver read off the screen.
+      // 3. Colours: the square's colour in the recording against what the driver read off the screen.
       const screenRgb = (rc.shape.driver as { screenColor?: unknown } | null)?.screenColor;
-      const videoRgb = f && 'rgb' in f ? (f as { rgb: [number, number, number] }).rgb : null;
-      if (Array.isArray(screenRgb) && videoRgb) {
-        const dist = Math.abs(videoRgb[0] - Number(screenRgb[0])) + Math.abs(videoRgb[1] - Number(screenRgb[1])) + Math.abs(videoRgb[2] - Number(screenRgb[2]));
+      if (f) {
+        const ok = Array.isArray(screenRgb) && colorDistance(f.rgb, screenRgb.map(Number)) < 60;
         checks.push({
-          name: 'Gerçek ekran kaydı: renkler doğru (ekrandaki eflatun kare kayıtta da eflatun)',
-          ok: dist < 60,
-          detail: `ekranda RGB ${JSON.stringify(screenRgb)}, kayıtta ${JSON.stringify(videoRgb)} (fark ${dist})`,
-          // Measured on the Windows runner (Hyper-V display, WARP): magenta recorded as green, the colour
-          // difference channels inverted. Reported, not a release stop, until checked on a real PC.
-          ...(dist >= 60 ? { known: 'ekran kaydında renk bozulması (eflatun→yeşil, renk farkı kanalları ters); gerçek PC\'de doğrulanacak' } : {}),
+          name: 'Gerçek ekran kaydı: renkler doğru (ekrandaki eflatun kare kayıtta da eflatun, fark < 60)',
+          ok,
+          detail: Array.isArray(screenRgb) ? `ekranda RGB ${JSON.stringify(screenRgb)}, kayıtta ${JSON.stringify(f.rgb)} (fark ${colorDistance(f.rgb, screenRgb.map(Number))})` : `sürücü ekrandaki rengi okuyamadı: ${JSON.stringify(screenRgb)}`,
         });
       }
     }
     if (rc?.exported) {
       const x = rc.exported;
+      const notMeasured = 'found' in x && !x.found && !!x.measureError;
       checks.push({
-        name: 'Gerçek ekran kaydı dışa aktarılınca (WebM 1080p) bilinen kare yine kare',
+        name: 'Gerçek ekran kaydı dışa aktarılınca (WebM 1080p) bilinen kare yine kare (en/boy 1 ± %2)',
         ok: 'ratio' in x && x.ratio !== null && Math.abs(x.ratio - 1) < 0.02,
-        ...('found' in x && !x.found ? { known: 'bilinen kare dışa aktarılan videoda bulunamadı; ölçüm sonra düzeltilecek' } : {}),
-        detail: 'error' in x ? `dışa aktarma: ${x.error}` : x.found ? `en/boy ${x.ratio} (1 olmalı), videoda g ${x.found.fw.toFixed(3)} y ${x.found.fh.toFixed(3)}, ${x.seconds} sn` : 'kare dışa aktarılan videoda bulunamadı',
+        // Only the test failing to read a frame of the export is not a release stop.
+        ...(notMeasured ? { known: 'ölçülemedi: test dışa aktarılan videonun karesini okuyamadı' } : {}),
+        detail: 'error' in x ? `dışa aktarma: ${x.error}` : x.found ? `en/boy ${x.ratio}, videoda x ${x.found.fx.toFixed(3)} y ${x.found.fy.toFixed(3)} g ${x.found.fw.toFixed(3)} y ${x.found.fh.toFixed(3)}, ${x.seconds} sn` : `kare dışa aktarılan videoda bulunamadı: ${x.misses.join(' · ')}`,
       });
     }
     if (rc?.screen && rc.display) {
@@ -535,18 +542,24 @@ interface RealCapture {
   backend: string | null;
   clicksCapability: boolean;
   seconds: number;
-  screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean; bars: Bars | null } | null;
+  screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean; bars: ReturnType<typeof darkBands> | null } | null;
   /** What the recording says about its screen video, and the display it recorded. */
   source: { width?: number; height?: number; fps?: number; seconds: number; displayAspect?: number } | null;
   display: { w: number; h: number; scale: number } | null;
-  mic: { duration: number; peak: number } | null;
+  mic: { duration: number; peak: number } | { skipped: string } | null;
   cursor: { moves: number; downs: number; buttons: string };
   driver: { clicks: number; matched: number; worstOffset: number } | null;
   /** The driver's 240 px magenta square: where it was on screen and where/how it shows in the video. */
   /** ratio: in the file's frames; drawn: as the editor and the export draw it (displayAspect applied). */
-  shape: { expected: { fx: number; fy: number; fw: number; fh: number }; found: { fx: number; fy: number; fw: number; fh: number } | null; ratio: number | null; drawn: number | null; driver: unknown; samples: unknown[]; scales: unknown } | null;
-  /** The recording exported (WebM 1080p, 16:9 frame): the same square's proportions there. */
-  exported: { seconds: number; ratio: number | null; found: { fx: number; fy: number; fw: number; fh: number } | null } | { error: string } | null;
+  shape: { expected: { fx: number; fy: number; fw: number; fh: number }; found: SquareFound | null; ratio: number | null; drawn: number | null; driver: unknown; samples: unknown[]; scales: unknown } | null;
+  /** Why the driver's square could not be measured at all (no driver log, no screen file). */
+  shapeMissing?: string;
+  /**
+   * The recording exported (WebM 1080p, 16:9 frame): the same square's proportions there.
+   * measureError: the test could not read a frame of the export (a fault of the measurement, not of
+   * the export), with the browser's reason.
+   */
+  exported: { seconds: number; ratio: number | null; found: SquareFound | null; misses: string[]; measureError?: string } | { error: string } | null;
   /**
    * What the recorder found about the screen track, when the app records it (asked of the capture
    * code: capabilities, settings, the first frame's size, which attempt gave the right shape).
@@ -562,7 +575,9 @@ interface RealCapture {
 
 /**
  * Records the main display for about six seconds through the Chromium path (backend "web"), as
- * the recording screen does, with the synthetic microphone. An outside driver
+ * the recording screen does, without camera or microphone: this run has no fake devices (they would
+ * replace the screen with Chromium's test pattern, main.ts) and a CI machine has no real ones; the
+ * microphone path is the smoke test's. An outside driver
  * (tests/real-capture-web/windows-clicks.ps1) clicks while the "recording" marker exists; its
  * clicks must come back in the cursor log at the same place. A black or empty picture fails.
  */
@@ -572,10 +587,10 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   const web = backends.find((b) => b.id === 'web');
   const display = (await api.sources()).find((s) => s.kind === 'display');
   expect(display, 'kaydedilecek ekran listede yok');
-  const mic = (await navigator.mediaDevices.enumerateDevices()).find((d) => d.kind === 'audioinput');
+  const devices = (await navigator.mediaDevices.enumerateDevices().catch(() => [])).map((d) => d.kind);
   await api.startCapture({
     projectName: 'Gerçek kayıt', target: { kind: 'display', sourceId: display!.id, displayId: display!.displayId, label: display!.name },
-    cameraDeviceId: null, cameraLabel: null, micDeviceId: mic?.deviceId ?? null, micLabel: mic?.label ?? null,
+    cameraDeviceId: null, cameraLabel: null, micDeviceId: null, micLabel: null,
     systemAudio: false, fps: 30, quality: 'standard', countdown: 0, backend: 'web',
   });
   const recording = await untilAsync(async () => (await api.captureState()).phase === 'recording', 30_000);
@@ -602,9 +617,9 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     // MediaRecorder's WebM has no duration in its header: Chromium reports Infinity until it has
     // looked at the end of the file.
     const duration = Number.isFinite(v.duration) ? v.duration : await durationBySeeking(url(src.file));
-    screen = { width: v.width, height: v.height, duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01), bars: await sideBars(url(src.file), 2.5) };
+    screen = { width: v.width, height: v.height, duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01), bars: await grabFrame(url(src.file), 2.5).then((g) => darkBands(g.px), () => null) };
   }
-  let micInfo: RealCapture['mic'] = null;
+  let micInfo: RealCapture['mic'] = { skipped: `mikrofon istenmedi (sahte aygıt yok; aygıtlar: ${devices.filter((k) => k === 'audioinput').length} mikrofon, ${devices.filter((k) => k === 'videoinput').length} kamera)` };
   if (rec!.sources.mic) {
     const sound = await decodeSound(url(rec!.sources.mic.file)).catch(() => null);
     micInfo = sound ? { duration: sound.duration, peak: peak(sound) } : { duration: 0, peak: 0 };
@@ -619,20 +634,26 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   let shape: RealCapture['shape'] = null;
   let exported: RealCapture['exported'] = null;
   let exportedUrl: string | null = null;
+  let shapeMissing: string | undefined;
   if (driverLog) {
     const log = JSON.parse(driverLog) as { screen?: { width: number; height: number }; clicks: { fx: number; fy: number; button: string }[]; shape?: { x?: number; y?: number; size?: number; fx: number; fy: number; fw: number; fh: number; screenColor?: unknown; formVisible?: unknown } };
     const clicks = log.clicks;
     if (log.shape && src) {
       // MediaRecorder's WebM has no index, so a seek may not reach the time asked for: look at
       // several moments and use the first that shows the square.
-      let found: (MagentaProbe & { rgb: [number, number, number] }) | null = null;
+      let found: SquareFound | null = null;
       const samples: unknown[] = [];
       const cx = log.shape.fx + log.shape.fw / 2;
       const cy = log.shape.fy + log.shape.fh / 2;
       for (const at of [3, 2, 4, 5, 1.5]) {
-        samples.push(await colorAt(url(src.file), at, cx, cy));
-        found ??= await magentaBox(url(src.file), at, { cx, cy, fw: log.shape.fw, fh: log.shape.fh });
-        if (found) break;
+        try {
+          const g = await grabFrame(url(src.file), at);
+          const f = findSquare(g.px, { cx, cy, fw: log.shape.fw, fh: log.shape.fh });
+          samples.push({ wanted: at, reached: g.reached, rgb: meanColor(g.px, cx, cy), ...(isFound(f) ? {} : { miss: f.reason }) });
+          if (isFound(f)) { found = f; break; }
+        } catch (e) {
+          samples.push({ wanted: at, error: (e as Error).message });
+        }
       }
       // Square on screen → square in the picture: width / height of its box in video pixels.
       const ratio = found && screen ? (found.fw * screen.width) / (found.fh * screen.height) : null;
@@ -661,17 +682,30 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
       const r = await routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format: 'webm', resolution: '1080', fps: 30, quality: 'standard', includeAudio: false }, () => undefined, new AbortController().signal);
       if (r.phase === 'done' && r.path) {
         exportedUrl = url(exportsRel(r.path));
-        let box: (MagentaProbe & { rgb: [number, number, number] }) | null = null;
+        let box: SquareFound | null = null;
+        const misses: string[] = [];
+        let measureError: string | undefined;
         // The 4:3 screen sits centered in the 16:9 frame: the square's middle keeps its place in the
         // screen's height and moves in its width by the pillar.
         const screenShare = (src.displayAspect ?? (screen ? screen.width / screen.height : 16 / 9)) / (16 / 9);
         const near = { cx: 0.5 + (cx - 0.5) * screenShare, cy, fw: log.shape.fw * screenShare, fh: log.shape.fh };
-        for (const at of [3, 2, 4]) { box = await magentaBox(url(exportsRel(r.path)), at, near); if (box) break; }
-        exported = { seconds: Math.round((performance.now() - t0) / 100) / 10, found: box, ratio: box ? Math.round(((box.fw * 1920) / (box.fh * 1080)) * 1000) / 1000 : null };
+        for (const at of [3, 2, 4]) {
+          try {
+            const f = findSquare((await grabFrame(exportedUrl, at)).px, near);
+            if (isFound(f)) { box = f; break; }
+            misses.push(`${at} sn: ${f.reason}`);
+          } catch (e) {
+            measureError = (e as Error).message;
+            misses.push(`${at} sn: ${measureError}`);
+          }
+        }
+        exported = { seconds: Math.round((performance.now() - t0) / 100) / 10, found: box, misses, ratio: box ? Math.round(((box.fw * 1920) / (box.fh * 1080)) * 1000) / 1000 : null, ...(!box && measureError ? { measureError } : {}) };
       } else {
         exported = { error: r.message ?? r.phase };
       }
     }
+    if (!log.shape) shapeMissing = 'sürücü günlüğünde kare yok';
+    else if (!src) shapeMissing = 'ekran dosyası yok';
     let matched = 0;
     let worst = 0;
     for (const c of clicks) {
@@ -680,6 +714,8 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
       worst = Math.max(worst, best ?? 1);
     }
     driver = { clicks: clicks.length, matched, worstOffset: Math.round(worst * 1e4) / 1e4 };
+  } else {
+    shapeMissing = 'tıklama sürücüsünün günlüğü (clicks.json) gelmedi';
   }
   const images = await lookImages(project, opened.mediaBase, src ? url(src.file) : null, exportedUrl, src?.displayAspect);
   const shot = await screenshot('gercek-kayit-sonrasi', 500);
@@ -688,14 +724,14 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     `arka uç ${rec!.capture.backend}, tıklama yardımcısı ${web?.capabilities.clicks ? 'var' : 'yok'}`,
     screen ? `ekran ${screen.width}×${screen.height}, ${screen.duration.toFixed(2)} sn, ${screen.frames} kare, yayılım ${screen.spread.toFixed(3)}${screen.black ? ' (SİYAH/BOŞ)' : ''}` : 'ekran dosyası yok',
     `kaynak kaydı ${src?.width}×${src?.height} @${src?.fps} fps, ekran ${display!.bounds?.w}×${display!.bounds?.h} ölçek ${display!.scaleFactor ?? 1}`,
-    micInfo ? `mikrofon ${micInfo.duration.toFixed(2)} sn, tepe ${micInfo.peak.toFixed(3)}` : 'mikrofon yok',
+    !micInfo ? 'mikrofon yok' : 'skipped' in micInfo ? micInfo.skipped : `mikrofon ${micInfo.duration.toFixed(2)} sn, tepe ${micInfo.peak.toFixed(3)}`,
     `imleç ${cursor.moves} konum, ${cursor.downs} tıklama (${cursor.buttons || '-'})`,
     driver ? `sürücü ${driver.clicks} tıklama, ${driver.matched} eşleşti (en büyük sapma ${driver.worstOffset})` : 'tıklama sürücüsü günlüğü yok',
   ].join(' · ');
   const source = src ? { width: src.width, height: src.height, fps: src.fps, seconds: src.duration / TICKS_PER_SECOND, ...(src.displayAspect ? { displayAspect: src.displayAspect } : {}) } : null;
   const b = display!.bounds;
   const out: RealCapture = {
-    summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, source, shape, exported,
+    summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, source, shape, ...(shapeMissing ? { shapeMissing } : {}), exported,
     frameCheck: (rec!.capture as unknown as { frameCheck?: unknown }).frameCheck ?? null, images,
     display: b ? { w: b.w, h: b.h, scale: display!.scaleFactor ?? 1 } : null, mic: micInfo, cursor, driver,
   };
@@ -733,31 +769,59 @@ async function lookImages(project: Project, mediaBase: string, recorded: string 
     if (j.error) throw new Error(`sürücü: ${j.error}`);
     return j.jpeg ? `data:image/jpeg;base64,${j.jpeg}` : null;
   });
-  await add('2-kayit-ham', `kaydedilen videonun ${LOOK_AT}. saniyedeki karesi, dosyadaki haliyle (en/boy dosyanınki)`, async () => (recorded ? frameJpeg(recorded, LOOK_AT, null) : null));
+  await add('2-kayit-ham', `kaydedilen videonun ${LOOK_AT}. saniyedeki karesi, dosyadaki haliyle (en/boy dosyanınki)`, async () => (recorded ? frameJpeg(recorded, LOOK_AT) : null));
   await add('3-kayit-cizilen', `aynı an, uygulamanın çizdiği haliyle (renderStill, 16:9 sahne${displayAspect ? `, displayAspect ${displayAspect.toFixed(4)}` : ''})`, async () => {
     const big = await renderStill(project, {}, mediaBase, secondsToTicks(LOOK_AT), 'v_16x9', { width: LOOK_WIDTH, height: Math.round((LOOK_WIDTH * 9) / 16) });
     return reencode(big);
   });
-  await add('4-disa-aktarilan', `dışa aktarılan WebM'in ${LOOK_AT}. saniyedeki karesi`, async () => (exported ? frameJpeg(exported, LOOK_AT, null) : null));
+  await add('4-disa-aktarilan', `dışa aktarılan WebM'in ${LOOK_AT}. saniyedeki karesi`, async () => (exported ? frameJpeg(exported, LOOK_AT) : null));
   return images;
 }
 
-/** A frame of a video at `at` seconds, LOOK_WIDTH wide, in the video's (or `aspect`'s) shape, JPEG q 0.6. */
-async function frameJpeg(src: string, at: number, aspect: number | null): Promise<string | null> {
+/** How long a video may take to show its first frame (the CI machine decodes in software). */
+const LOAD_MS = 20_000;
+
+/**
+ * One decoded frame of a video at `at` seconds (the seek may land near it: MediaRecorder's WebM has
+ * no index), as pixels in the video's own size. Throws with the browser's reason (media error,
+ * ready and network state, time waited), so a measurement that could not read a frame says why.
+ */
+async function grabFrame(src: string, at: number): Promise<{ px: Pixels; reached: number; canvas: HTMLCanvasElement }> {
   const v = document.createElement('video');
   v.muted = true;
-  v.crossOrigin = 'anonymous';
+  v.preload = 'auto';
+  v.crossOrigin = 'anonymous'; // the media protocol answers with CORS; without it the canvas is tainted
+  const t0 = performance.now();
+  const release = () => { v.removeAttribute('src'); v.load(); };
+  const state = () => `readyState ${v.readyState}, networkState ${v.networkState}, ${Math.round(performance.now() - t0)} ms · …${decodeURIComponent(src).slice(-60)}`;
   v.src = src;
-  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
-  if (!ok) return null;
+  const failed = await new Promise<string | null>((res) => {
+    v.onloadeddata = () => res(null);
+    v.onerror = () => res(`açılamadı: hata ${v.error?.code ?? '?'} ${v.error?.message ?? ''}`.trim());
+    setTimeout(() => res(`${LOAD_MS / 1000} sn içinde ilk kare gelmedi`), LOAD_MS);
+  });
+  if (failed) { const why = `${failed} (${state()})`; release(); throw new Error(why); }
   v.currentTime = at;
-  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
+  const seek = await new Promise<string | null>((res) => { v.onseeked = () => res(null); v.onerror = () => res(`atlarken hata ${v.error?.code ?? '?'}`); setTimeout(() => res(null), 5000); });
+  if (seek) { const why = `${seek} (${state()})`; release(); throw new Error(why); }
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  if (!c.width || !c.height) { const why = `kare boyutu 0 (${state()})`; release(); throw new Error(why); }
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(v, 0, 0);
+  const reached = Math.round(v.currentTime * 100) / 100;
+  const data = g.getImageData(0, 0, c.width, c.height).data;
+  release();
+  return { px: { data, width: c.width, height: c.height }, reached, canvas: c };
+}
+
+/** A frame of a video at `at` seconds, LOOK_WIDTH wide in the video's shape, JPEG q 0.6. */
+async function frameJpeg(src: string, at: number): Promise<string> {
+  const { canvas } = await grabFrame(src, at);
   const c = document.createElement('canvas');
   c.width = LOOK_WIDTH;
-  c.height = Math.max(1, Math.round(LOOK_WIDTH / (aspect ?? v.videoWidth / v.videoHeight)));
-  c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height);
-  v.removeAttribute('src');
-  v.load();
+  c.height = Math.max(1, Math.round((LOOK_WIDTH * canvas.height) / canvas.width));
+  c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.6);
 }
 
@@ -770,113 +834,6 @@ async function reencode(dataUrl: string): Promise<string> {
   c.width = img.naturalWidth; c.height = img.naturalHeight;
   c.getContext('2d')!.drawImage(img, 0, 0);
   return c.toDataURL('image/jpeg', 0.6);
-}
-
-/** Box of the magenta pixels (the click driver's square) in a frame, as fractions of the frame. */
-interface MagentaProbe { fx: number; fy: number; fw: number; fh: number }
-/** What a frame shows where the square should be (mean RGB of its middle) and the time reached. */
-async function colorAt(src: string, at: number, cx: number, cy: number): Promise<{ wanted: number; reached: number; rgb: [number, number, number] } | null> {
-  const v = document.createElement('video');
-  v.muted = true;
-  v.crossOrigin = 'anonymous';
-  v.src = src;
-  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
-  if (!ok) return null;
-  v.currentTime = at;
-  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
-  const c = document.createElement('canvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.drawImage(v, 0, 0);
-  const d = g.getImageData(Math.max(0, Math.round(cx * c.width) - 4), Math.max(0, Math.round(cy * c.height) - 4), 8, 8).data;
-  const sum: [number, number, number] = [0, 0, 0];
-  for (let i = 0; i < d.length; i += 4) { sum[0] = sum[0] + d[i]!; sum[1] = sum[1] + d[i + 1]!; sum[2] = sum[2] + d[i + 2]!; }
-  const reached = v.currentTime;
-  v.removeAttribute('src');
-  v.load();
-  return { wanted: at, reached: Math.round(reached * 100) / 100, rgb: sum.map((x) => Math.round(x / (d.length / 4))) as [number, number, number] };
-}
-
-/**
- * Box of the driver's square in a frame, as fractions of the frame, found by its colour *in this
- * video* (the colour at the square's expected middle), so a recording with wrong colours (measured on
- * the Windows runner: magenta came out green) is still measured for its shape. The search stays in a
- * window around the expected place (`near`: middle and size as fractions), where the square's black
- * frame separates it from the desktop.
- */
-async function magentaBox(src: string, at: number, near: { cx: number; cy: number; fw: number; fh: number }): Promise<(MagentaProbe & { rgb: [number, number, number] }) | null> {
-  const v = document.createElement('video');
-  v.muted = true;
-  v.crossOrigin = 'anonymous';
-  v.src = src;
-  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
-  if (!ok) return null;
-  v.currentTime = at;
-  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
-  const w = v.videoWidth;
-  const h = v.videoHeight;
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.drawImage(v, 0, 0, w, h);
-  const d = g.getImageData(0, 0, w, h).data;
-  v.removeAttribute('src');
-  v.load();
-  const px = (x: number, y: number) => (y * w + x) * 4;
-  // The square's own colour in this video: mean of 8×8 pixels at its expected middle.
-  const mx = Math.round(near.cx * w);
-  const my = Math.round(near.cy * h);
-  const ref: [number, number, number] = [0, 0, 0];
-  for (let y = my - 4; y < my + 4; y++) for (let x = mx - 4; x < mx + 4; x++) { const i = px(x, y); ref[0] = ref[0] + d[i]!; ref[1] = ref[1] + d[i + 1]!; ref[2] = ref[2] + d[i + 2]!; }
-  const rgb = ref.map((x) => Math.round(x / 64)) as [number, number, number];
-  // A square must stand out from its black frame; a near-black middle means it is not there.
-  if (rgb[0] + rgb[1] + rgb[2] < 90) return null;
-  const xa = Math.max(0, Math.floor((near.cx - near.fw) * w));
-  const xb = Math.min(w - 1, Math.ceil((near.cx + near.fw) * w));
-  const ya = Math.max(0, Math.floor((near.cy - near.fh) * h));
-  const yb = Math.min(h - 1, Math.ceil((near.cy + near.fh) * h));
-  let x0 = w; let y0 = h; let x1 = -1; let y1 = -1;
-  for (let y = ya; y <= yb; y++) {
-    for (let x = xa; x <= xb; x++) {
-      const i = px(x, y);
-      if (Math.abs(d[i]! - rgb[0]) + Math.abs(d[i + 1]! - rgb[1]) + Math.abs(d[i + 2]! - rgb[2]) < 90) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-    }
-  }
-  if (x1 < 0) return null;
-  // The square sits inside its black frame: a box that reaches the search window's edge is a plain
-  // area of that colour, not the square (Windows CI run 8 measured the whole window as "2× square").
-  if (x0 <= xa || x1 >= xb || y0 <= ya || y1 >= yb) return null;
-  return { fx: x0 / w, fy: y0 / h, fw: (x1 - x0 + 1) / w, fh: (y1 - y0 + 1) / h, rgb };
-}
-
-/** Uniform dark columns or rows at the frame's edges (letterbox/pillarbox), in pixels of the video. */
-interface Bars { left: number; right: number; top: number; bottom: number }
-async function sideBars(src: string, at: number): Promise<Bars | null> {
-  const v = document.createElement('video');
-  v.muted = true;
-  v.crossOrigin = 'anonymous'; // the media protocol answers with CORS; without it the canvas is tainted
-  v.src = src;
-  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
-  if (!ok) return null;
-  v.currentTime = at;
-  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
-  const w = v.videoWidth;
-  const h = v.videoHeight;
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.drawImage(v, 0, 0, w, h);
-  const d = g.getImageData(0, 0, w, h).data;
-  v.removeAttribute('src');
-  v.load();
-  const dark = (x: number, y: number) => { const i = (y * w + x) * 4; return d[i]! + d[i + 1]! + d[i + 2]! < 24; };
-  const col = (x: number) => { for (let y = 0; y < h; y += 4) if (!dark(x, y)) return false; return true; };
-  const row = (y: number) => { for (let x = 0; x < w; x += 4) if (!dark(x, y)) return false; return true; };
-  let left = 0; while (left < w / 2 && col(left)) left++;
-  let right = 0; while (right < w / 2 && col(w - 1 - right)) right++;
-  let top = 0; while (top < h / 2 && row(top)) top++;
-  let bottom = 0; while (bottom < h / 2 && row(h - 1 - bottom)) bottom++;
-  return { left, right, top, bottom };
 }
 
 /** Duration of a video whose header has none: seek far past the end, then read it. */

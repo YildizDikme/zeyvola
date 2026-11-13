@@ -235,18 +235,39 @@ async function magnifierChecks(checks: Check[]): Promise<void> {
 async function contextLifetime(checks: Check[]): Promise<void> {
   const first = document.createElement('canvas');
   const keep = new Compositor(first);
-  let lost = false;
-  first.addEventListener('webglcontextlost', () => { lost = true; });
+  // Diagnosis when it fails (Windows CI run 9, WARP, once): when the first context was lost (after
+  // how many open/close rounds, how long in), the browser's statusMessage, how fast the rounds went,
+  // and whether a context made afterwards is sound (all lost at once = the GPU process reset; only
+  // the oldest = the per-page limit). The check itself stays as strict.
+  const loss: { at: { round: number; ms: number; statusMessage: string } | null } = { at: null };
+  let round = 0;
+  const t0 = performance.now();
+  first.addEventListener('webglcontextlost', (ev) => { loss.at ??= { round, ms: Math.round(performance.now() - t0), statusMessage: (ev as WebGLContextEvent).statusMessage || '-' }; });
   const held: HTMLCanvasElement[] = []; // kept alive on purpose: garbage collection must not be what frees them
+  const roundMs: number[] = [];
   for (let i = 0; i < 40; i++) {
+    round = i + 1;
+    const r0 = performance.now();
     const c = document.createElement('canvas');
     held.push(c);
     new Compositor(c).dispose();
+    roundMs.push(performance.now() - r0);
   }
+  const loopMs = Math.round(performance.now() - t0);
   await sleep(300);
+  const lost = loss.at;
   const ok = !lost && !keep.gl.isContextLost();
+  let after = 'denenmedi';
+  if (!ok) {
+    try { const probe = new Compositor(document.createElement('canvas')); after = probe.gl.isContextLost() ? 'yeni bağlam da kayıp' : 'yeni bağlam sağlam'; probe.dispose(); } catch (e) { after = `yeni bağlam açılamadı: ${(e as Error).message}`; }
+  }
   keep.dispose();
-  checks.push({ name: 'Derleyici kapatılınca WebGL bağlamını bırakır: 40 aç-kapa sonrası ilk bağlam sağlam', ok, detail: `${held.length} aç-kapa, ilk bağlam ${ok ? 'sağlam' : 'kayboldu'}` });
+  const slowest = Math.round(Math.max(...roundMs));
+  const why = lost ? `kayıp ${lost.round}. aç-kapada, ${lost.ms} ms sonra, statusMessage "${lost.statusMessage}"` : keep.gl.isContextLost() ? 'olay gelmeden kayıp görünüyor' : '';
+  checks.push({
+    name: 'Derleyici kapatılınca WebGL bağlamını bırakır: 40 aç-kapa sonrası ilk bağlam sağlam', ok,
+    detail: `${held.length} aç-kapa ${loopMs} ms (en yavaşı ${slowest} ms), ilk bağlam ${ok ? 'sağlam' : `kayboldu: ${why}; ${after}`}`,
+  });
 }
 
 async function codecMatrix(): Promise<Record<string, string>> {

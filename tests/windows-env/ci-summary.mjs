@@ -18,6 +18,28 @@ const read = (f) => { try { return JSON.parse(readFileSync(f, 'utf8').replace(/^
 const lines = [];
 const say = (s = '') => lines.push(s);
 
+// First: the real recording's shape (the capture code's report). On a real display the first frame
+// should have the display's shape, so no correction runs (held "initial") and no displayAspect is
+// stored; otherwise which step held.
+{
+  const shapes = files.filter((x) => x.endsWith('ui-report.json')).map((f) => [f, read(f)]).filter(([, r]) => r?.realCapture || r?.captureShape?.length);
+  if (shapes.length) {
+    say('## Kayıt şekli (gerçek ekran kaydı)');
+    for (const [f, r] of shapes) {
+      for (const c of r.captureShape ?? []) {
+        const d = c.display ?? {};
+        const ff = c.firstFrame ?? {};
+        const right = d.width && ff.width ? Math.abs(ff.width / ff.height - d.width / d.height) < 0.02 : null;
+        const tried = (c.attempts ?? []).map((a) => `${a.name}${a.ok ? ' TUTTU' : ''}${a.frame ? ` ${a.frame.width}×${a.frame.height}` : ''}${a.accepted === false ? ' (reddedildi)' : ''}`).join(', ');
+        say(`${relative(out, f)}: ekran ${d.width}×${d.height}, ilk kare ${ff.width}×${ff.height} ${ff.format ?? ''} → ${right === true ? 'DOĞRU ŞEKİL' : right === false ? 'YANLIŞ ŞEKİL' : '?'}; tutan: ${c.held}${tried ? `; denenen: ${tried}` : '; düzeltme zinciri çalışmadı'}`);
+      }
+      const src = r.realCapture?.source;
+      if (src) say(`${relative(out, f)}: kaynak ${src.width}×${src.height}, displayAspect ${src.displayAspect ? `SAKLANDI ${src.displayAspect.toFixed(4)}` : 'saklanmadı'}`);
+    }
+    say();
+  }
+}
+
 for (const f of files.filter((x) => x.endsWith('-report.json'))) {
   const r = read(f);
   const run = read(f.replace(/-report\.json$/, '-run.json'));
@@ -38,6 +60,7 @@ for (const f of files.filter((x) => x.endsWith('-report.json'))) {
     for (const im of images ?? []) say(`Resim ${im.name}: ${im.note}${im.error ? ` — YOK: ${im.error}` : im.jpeg ? ` (${Math.round((im.jpeg.length * 3) / 4 / 1024)} KB)` : ''}`);
   }
   for (const c of r.captureShape ?? []) say(`Kayıt penceresinin biçim raporu: ${JSON.stringify(c)}`);
+  if (r.gpuLog?.length) { say('Chromium GPU/WebGL satırları:'); for (const l of r.gpuLog) say(`  ${l}`); }
   if (r.exportFacts) say(`Dışa aktarma ölçüleri: ${JSON.stringify(r.exportFacts)}`);
   if (r.mp4Route || r.webCodecsH264 !== undefined) say(`MP4 yolu: ${r.mp4Route ?? '?'}, WebCodecs donanım H.264: ${r.webCodecsH264}`);
   if (r.userAgent) say(`userAgent: ${r.userAgent}`);
@@ -96,4 +119,8 @@ if (process.env.GITHUB_STEP_SUMMARY && text) appendFileSync(process.env.GITHUB_S
       try { for (const l of imageLines(im.name, im.jpeg)) console.log(l); } catch (e) { console.log(`resim ${im.name} yazılamadı: ${e.message}`); }
     }
   }
+  // And the development run's raw recorded frame, as one more picture.
+  const dev = reports.find((x) => /dev[\\/]ui-report\.json$/.test(x));
+  const raw = dev && dev !== pick ? (read(dev)?.realCapture?.images ?? []).find((im) => im.name === '2-kayit-ham') : null;
+  if (raw?.jpeg) { try { for (const l of imageLines('dev-2-kayit-ham', raw.jpeg)) console.log(l); } catch (e) { console.log(`resim dev-2-kayit-ham yazılamadı: ${e.message}`); } }
 }

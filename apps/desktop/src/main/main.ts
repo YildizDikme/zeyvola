@@ -42,8 +42,11 @@ const TEST_HOME = SMOKE || CODEC_PROBE ? null : process.env.ZEYVOLA_TEST_HOME ??
 if (TEST_HOME) app.setPath('userData', join(TEST_HOME, 'userData'));
 registerMediaScheme();
 if (SMOKE) {
-  // Synthetic camera/microphone for tests: no real device, no permission prompt.
-  app.commandLine.appendSwitch('use-fake-device-for-media-stream');
+  // Synthetic camera/microphone for tests: no real device, no permission prompt. The fake-device
+  // switch also replaces the *screen* with Chromium's test pattern, so the real screen recording test
+  // (ZEYVOLA_TEST_REAL_CAPTURE=1, Windows CI) goes without it and records the real display; it then
+  // uses whatever microphone the machine has, or none (no camera is asked for in that test).
+  if (process.env.ZEYVOLA_TEST_REAL_CAPTURE !== '1') app.commandLine.appendSwitch('use-fake-device-for-media-stream');
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 }
 

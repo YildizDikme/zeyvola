@@ -236,6 +236,9 @@ report.captureShape = log.split('\n').flatMap((l) => {
   }
   return [];
 });
+// Chromium's own lines about WebGL contexts and the GPU process (a lost context's cause: the
+// per-page context limit, a GPU process crash or reset). At most 30, for the report.
+report.gpuLog = log.split('\n').filter((l) => /Too many active WebGL contexts|WebGL.*(lost|CONTEXT_LOST)|GPU process (exited|crashed|isn't usable)|GpuProcessHost|DXGI_ERROR|device (removed|reset)|lost context/i.test(l)).slice(0, 30).map((l) => l.slice(0, 300));
 // Part of every suite's verdict: a run that started OpenH264 fails, whatever the app reported.
 report.checks = [...(report.checks ?? []), { name: 'OpenH264 hiç başlatılmadı (uygulama günlüğünde [OpenH264] satırı yok)', ok: openH264Lines === 0, detail: `${openH264Lines} satır` }];
 report.ok = report.ok && openH264Lines === 0;
