@@ -3,6 +3,7 @@ import type { BackendInfo, CaptureConfig, PermissionInfo, SourceInfo } from '@ze
 import { api } from '../api';
 import { Badge, Button, IconButton, Segmented, Select, Toggle } from '../ui/controls';
 import { Icon } from '../ui/icons';
+import { keyLabel, RECORDING_KEYS } from '../ui/keys';
 import { t } from '../i18n';
 
 type Kind = 'display' | 'window' | 'region';
@@ -290,7 +291,7 @@ export function NewRecording(props: { initialKind?: Kind; onBack: () => void; on
           <Button variant="record" size="lg" icon="record" wide onClick={start} disabled={!source || starting || (kind === 'region' && !region)}>
             {starting ? t("Kamera ve kayıt hazırlanıyor…") : t("Kaydı başlat")}
           </Button>
-          <p className="muted small center">{t("Kayıt sırasında:")} <kbd className="kbd">⌥⇧S</kbd> {t("bitir ·")} <kbd className="kbd">⌥⇧P</kbd> {t("duraklat ·")} <kbd className="kbd">⌥⇧M</kbd> {t("işaret")}</p>
+          <p className="muted small center">{t("Kayıt sırasında:")} <kbd className="kbd">{keyLabel(RECORDING_KEYS.stop)}</kbd> {t("bitir ·")} <kbd className="kbd">{keyLabel(RECORDING_KEYS.pause)}</kbd> {t("duraklat ·")} <kbd className="kbd">{keyLabel(RECORDING_KEYS.mark)}</kbd> {t("işaret")}</p>
         </aside>
       </div>
     </div>

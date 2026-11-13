@@ -11,6 +11,7 @@ import { Player } from '../../playback/player';
 import { EditorStore, useEditor, type Tool } from '../../state/editor-store';
 import { Button, EditableText, IconButton, Kbd, Segmented } from '../../ui/controls';
 import { Icon } from '../../ui/icons';
+import { keyLabel, RECORDING_KEYS, redoLabel } from '../../ui/keys';
 import { Settings } from '../Settings';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
@@ -61,7 +62,7 @@ export function Editor({ opened, onBack, notice: initialNotice, onNoticeShown }:
       // Older projects may contain stacked items; repair them once (undoable).
       if (resolveOverlaps(store.project) !== store.project) {
         store.apply(resolveOverlaps);
-        store.notify(t("Üst üste binen öğeler düzeltildi. Geri almak için ⌘Z."));
+        store.notify(t("Üst üste binen öğeler düzeltildi. Geri almak için {key}.", { key: keyLabel('mod+Z') }));
       }
       await store.loadCursors();
       // First open of a fresh recording: generate zoom suggestions once.
@@ -211,10 +212,10 @@ export function Editor({ opened, onBack, notice: initialNotice, onNoticeShown }:
             onChange={(id) => store.apply((p) => setActiveVariant(p, id))} />
         </div>
         <div className="topbar-right no-drag">
-          <IconButton icon="undo" label={t("Geri al (⌘Z)")} onClick={() => store.undo()} disabled={!canUndo} />
-          <IconButton icon="redo" label={t("Yinele (⇧⌘Z)")} onClick={() => store.redo()} disabled={!canRedo} />
+          <IconButton icon="undo" label={t("Geri al ({key})", { key: keyLabel('mod+Z') })} onClick={() => store.undo()} disabled={!canUndo} />
+          <IconButton icon="redo" label={t("Yinele ({key})", { key: redoLabel() })} onClick={() => store.redo()} disabled={!canRedo} />
           <IconButton icon="info" label={t("Kısayollar (?)")} onClick={() => setHelp(!help)} active={help} />
-          <IconButton icon="sliders" label={t("Ayarlar (⌘,)")} onClick={() => setSettingsOpen(true)} active={settingsOpen} />
+          <IconButton icon="sliders" label={t("Ayarlar ({key})", { key: keyLabel('mod+,') })} onClick={() => setSettingsOpen(true)} active={settingsOpen} />
           <Button variant="primary" icon="export" onClick={() => store.setExportOpen(true)} disabled={duration === 0}>{t("Dışa aktar")}</Button>
         </div>
       </header>
@@ -264,7 +265,7 @@ export function Editor({ opened, onBack, notice: initialNotice, onNoticeShown }:
         </div>
         <div className="transport-right">
           <span className="muted small">{variant.width}×{variant.height} · {project.sequence.fps.num / project.sequence.fps.den} fps</span>
-          <IconButton icon="zoom" label={t("Zaman çizelgesini yakınlaştır (⌘ + kaydırma)")} onClick={() => store.setPxPerSecond(store.getState().pxPerSecond * 1.4)} />
+          <IconButton icon="zoom" label={t("Zaman çizelgesini yakınlaştır ({key} + kaydırma)", { key: keyLabel('mod') })} onClick={() => store.setPxPerSecond(store.getState().pxPerSecond * 1.4)} />
         </div>
       </div>
       <Timeline store={store} player={player} />
@@ -293,10 +294,10 @@ function Timecode({ store }: { store: EditorStore }) {
 
 function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
-    [t("Boşluk"), t("Oynat / duraklat")], ['← →', t("Kare kare ilerle (⇧ ile 1 sn)")], ['K', t("Dinamik kamera (kamerayı zaman aralığında taşı)")], ['C', t("Kesme modu (fareyle tıklayarak kes)")], ['S', t("Oynatma imlecinin olduğu yerden böl")],
+    [t("Boşluk"), t("Oynat / duraklat")], ['← →', t("Kare kare ilerle ({key} ile 1 sn)", { key: keyLabel('shift') })], ['K', t("Dinamik kamera (kamerayı zaman aralığında taşı)")], ['C', t("Kesme modu (fareyle tıklayarak kes)")], ['S', t("Oynatma imlecinin olduğu yerden böl")],
     ['Z', t("Zoom aracı")], ['M', t("Büyüteç aracı")], ['B', t("Gizleme aracı")], [t("V / Esc"), t("Seçim aracı")], [t("Sil"), t("Seçili öğeyi sil")],
-    ['⌘Z / ⇧⌘Z', t("Geri al / yinele")], ['⌘E', t("Dışa aktar")], [t("⌘ + kaydırma"), t("Zaman çizelgesi ölçeği")],
-    ['⌥⇧S · ⌥⇧P · ⌥⇧M', t("Kayıtta: bitir · duraklat · işaret")],
+    [`${keyLabel('mod+Z')} / ${redoLabel()}`, t("Geri al / yinele")], [keyLabel('mod+E'), t("Dışa aktar")], [t("{key} + kaydırma", { key: keyLabel('mod') }), t("Zaman çizelgesi ölçeği")],
+    [[RECORDING_KEYS.stop, RECORDING_KEYS.pause, RECORDING_KEYS.mark].map(keyLabel).join(' · '), t("Kayıtta: bitir · duraklat · işaret")],
   ];
   return (
     <div className="popover shortcut-help" role="dialog" aria-label={t("Klavye kısayolları")}>

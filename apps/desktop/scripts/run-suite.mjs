@@ -243,10 +243,12 @@ report.ok = report.ok && openH264Lines === 0;
 writeFileSync(reportFile, `${JSON.stringify(report, null, 1)}\n`);
 if (report.checks?.length) console.log('');
 for (const c of report.checks ?? []) {
-  console.log(`${c.ok ? '  ✓' : '  ✗'} ${c.name}${c.detail ? `  — ${c.detail}` : ''}${c.ms ? `  (${Math.round(c.ms)} ms)` : ''}`);
+  console.log(`${c.ok ? '  ✓' : c.known ? '  ⚠' : '  ✗'} ${c.name}${c.detail ? `  — ${c.detail}` : ''}${c.ms ? `  (${Math.round(c.ms)} ms)` : ''}${!c.ok && c.known ? `  [bilinen sorun: ${c.known}]` : ''}`);
 }
 if (report.error) console.error(`Hata: ${report.error}`);
-const failed = (report.checks ?? []).filter((c) => !c.ok).length;
+const failed = (report.checks ?? []).filter((c) => !c.ok && !c.known).length;
+const known = (report.checks ?? []).filter((c) => !c.ok && c.known).length;
+if (known) console.log(`\n${known} bilinen sorun (işi durdurmaz; ayrıntı yukarıda ⚠ satırlarında).`);
 console.log(report.ok ? `\n${SUITES[suite].title}: tamam.` : `\n${SUITES[suite].title}: ${failed || 1} sorun.`);
 keep({ ok: report.ok, checks: (report.checks ?? []).length, failed });
 if (outDir) console.log(`Rapor, günlük ve görüntüler: ${shown(outDir)}`);

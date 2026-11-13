@@ -29,8 +29,12 @@ import { avcProfileName, compareFrames, mp4Tracks, sharpness } from './mp4-stats
 import { t } from '../i18n';
 import { recordLikeBrowser } from '../smoke-fixtures';
 import {
-  all, button, click, cpuNow, cpuPercent, createSampleProject, currentEditor, decodeSound, exportsRel, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, routedExport, screenshot, sleep, text, until, type Check,
+  all, button, buttonStarting, click, commandKey, cpuNow, passed, cpuPercent, createSampleProject, currentEditor, decodeSound, exportsRel, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, routedExport, screenshot, sleep, text, until, type Check,
 } from './harness';
+
+/** Start of the undo / redo buttons' names; test runs are in Turkish, the shortcut part varies per platform. */
+const UNDO = 'Geri al';
+const REDO = 'Yinele';
 
 export async function runUiTest(): Promise<unknown> {
   const checks: Check[] = [];
@@ -103,10 +107,10 @@ export async function runUiTest(): Promise<unknown> {
     expect(store.project.zooms.length === before.length + 1 - replaced.length, `toplam ${store.project.zooms.length}, beklenen ${before.length + 1 - replaced.length}`);
     expect(await until(() => all('.tl-item.tl-zoom').length === store.project.zooms.length, 3000), `çizelgede ${all('.tl-item.tl-zoom').length}, projede ${store.project.zooms.length} zoom`);
     const withManual = ids(store.project.zooms);
-    click(button(t("Geri al (⌘Z)")), 'Geri al');
+    click(buttonStarting(UNDO), 'Geri al');
     expect(await until(() => ids(store.project.zooms) === ids(before), 3000), 'geri al önceki zoom\'ları geri getirmedi');
     expect(await until(() => all('.tl-item.tl-zoom').length === before.length, 3000), 'geri aldıktan sonra çizelge güncellenmedi');
-    click(button(t("Yinele (⇧⌘Z)")), 'Yinele');
+    click(buttonStarting(REDO), 'Yinele');
     expect(await until(() => ids(store.project.zooms) === withManual, 3000), 'yinele elle zoom\'u geri getirmedi');
     click(option(t("Araç"), t("Seç")), 'Seç aracı');
     return `${before.length} zoom → elle 1 eklendi, ${replaced.length} öneri yerini verdi → ${store.project.zooms.length} zoom`;
@@ -136,8 +140,26 @@ export async function runUiTest(): Promise<unknown> {
     key('s');
     expect(await until(() => store.project.sequence.segments.length === before + 1, 2000), 'klip bölünmedi');
     expect(await until(() => all('.tl-seg.tl-seg-screen').length === before + 1, 3000), 'bölünen klip çizelgede görünmüyor');
-    key('z', { metaKey: true });
+    key('z', commandKey());
     expect(await until(() => store.project.sequence.segments.length === before, 2000), 'geri al bölmeyi kaldırmadı');
+  });
+
+  // Windows shows its own shortcut names: Ctrl, Alt, Shift — never the Mac's ⌘ ⌥ ⇧ (CLAUDE.md user
+  // decision 2026-11-13). Every visible text, accessible name and tooltip of the editor is read.
+  if (editing && window.zeyvola?.platform === 'win32') await step('Windows kısayolları: ⌘ ⌥ ⇧ görünmez, Ctrl yazılır; Ctrl+Z gerçekten geri alır', async () => {
+    const labels = all('button, [role="radio"], [title], kbd, .kbd, .shortcut').flatMap((el) => [text(el), el.getAttribute('aria-label') ?? '', el.getAttribute('title') ?? '']).filter(Boolean);
+    const mac = [...new Set(labels.filter((l) => /[⌘⌥⇧]/.test(l)))];
+    expect(mac.length === 0, `Mac simgeli etiketler: ${mac.slice(0, 8).join(' · ')}`);
+    const undo = buttonStarting(UNDO);
+    const undoLabel = undo?.getAttribute('aria-label') ?? text(undo);
+    expect(/Ctrl/.test(undoLabel), `geri al etiketi: "${undoLabel}"`);
+    // Ctrl+Z on a real change: a split, then Ctrl+Z, takes it back.
+    const before = store.project.sequence.segments.length;
+    key('s');
+    expect(await until(() => store.project.sequence.segments.length === before + 1, 2000), 'klip bölünmedi');
+    key('z', { ctrlKey: true });
+    expect(await until(() => store.project.sequence.segments.length === before, 2000), 'Ctrl+Z bölmeyi geri almadı');
+    return `${labels.length} etiket okundu, geri al: "${undoLabel}"`;
   });
 
   if (editing) await step('Otomatik zoom: Zoom sekmesinde "Önerileri temizle" ve "Önerileri oluştur" çalışır, elle zoom\'a dokunmaz', async () => {
@@ -413,7 +435,7 @@ export async function runUiTest(): Promise<unknown> {
     }
   }
 
-  return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST, ...(env.only ? { only: env.only } : {}), ...(exportFacts ? { exportFacts } : {}), ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
+  return { suite: 'ui', ok: passed(checks), knownIssues: checks.filter((c) => !c.ok && c.known).length, checks, shots, dist: DIST, ...(env.only ? { only: env.only } : {}), ...(exportFacts ? { exportFacts } : {}), ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
 }
 
 interface AvCheck {

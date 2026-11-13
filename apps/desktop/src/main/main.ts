@@ -21,6 +21,7 @@ import { displayFolder, ExportTargets, ExportWriter, safeBaseName, uniquePath, w
 import { handleMediaProtocol, mediaBase, registerMediaScheme } from './media-protocol';
 import { getPermissions, openPermissionSettings, requestPermission } from './permissions';
 import { appIcon, circleIcon } from './png';
+import { shortcutLabel } from '../shared/shortcut-label';
 import { suiteFromArgv } from '../shared/test-suite';
 import { getLastExportFolder, loadSettings, onSettingsChanged, setLastExportFolder, settingsInfo, tm, updateSettings } from './settings';
 import { ProjectStore } from './projects';
@@ -553,11 +554,11 @@ function updateRecordingChrome(): void {
     if (process.platform === 'darwin') tray.setTitle(` ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
     tray.setContextMenu(Menu.buildFromTemplate([
       phase === 'paused'
-        ? { label: `${tm('Devam et')} (⌥⇧P)`, click: () => void capture.resume() }
-        : { label: `${tm('Duraklat')} (⌥⇧P)`, click: () => void capture.pause(), enabled: phase === 'recording' },
-      { label: `${tm('İşaret koy')} (⌥⇧M)`, click: () => capture.mark(), enabled: phase === 'recording' },
+        ? { label: `${tm('Devam et')} (${shortcutLabel('alt+shift+P', process.platform)})`, click: () => void capture.resume() }
+        : { label: `${tm('Duraklat')} (${shortcutLabel('alt+shift+P', process.platform)})`, click: () => void capture.pause(), enabled: phase === 'recording' },
+      { label: `${tm('İşaret koy')} (${shortcutLabel('alt+shift+M', process.platform)})`, click: () => capture.mark(), enabled: phase === 'recording' },
       { type: 'separator' },
-      { label: `${tm('Kaydı bitir')} (⌥⇧S)`, click: () => void capture.stop() },
+      { label: `${tm('Kaydı bitir')} (${shortcutLabel('alt+shift+S', process.platform)})`, click: () => void capture.stop() },
       { label: tm('Kaydı iptal et'), click: () => void capture.cancel() },
     ]));
   }

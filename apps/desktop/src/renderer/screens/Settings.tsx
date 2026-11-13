@@ -5,6 +5,7 @@ import type { LangSetting, SettingsInfo } from '../../shared/i18n';
 import { api } from '../api';
 import { Badge, Button, Kbd, Segmented } from '../ui/controls';
 import { Icon } from '../ui/icons';
+import { keyLabel, RECORDING_KEYS } from '../ui/keys';
 import { LicensesSection } from './Licenses';
 import { t } from '../i18n';
 
@@ -103,9 +104,9 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
       <section>
         <h2>{t("Kısayollar")}</h2>
         <dl className="shortcut-list">
-          <div><dt><Kbd>⌥⇧S</Kbd></dt><dd>{t("Kaydı bitir")}</dd></div>
-          <div><dt><Kbd>⌥⇧P</Kbd></dt><dd>{t("Kaydı duraklat / devam ettir")}</dd></div>
-          <div><dt><Kbd>⌥⇧M</Kbd></dt><dd>{t("Kayıt sırasında işaret koy (zoom için ipucu olur)")}</dd></div>
+          <div><dt><Kbd>{keyLabel(RECORDING_KEYS.stop)}</Kbd></dt><dd>{t("Kaydı bitir")}</dd></div>
+          <div><dt><Kbd>{keyLabel(RECORDING_KEYS.pause)}</Kbd></dt><dd>{t("Kaydı duraklat / devam ettir")}</dd></div>
+          <div><dt><Kbd>{keyLabel(RECORDING_KEYS.mark)}</Kbd></dt><dd>{t("Kayıt sırasında işaret koy (zoom için ipucu olur)")}</dd></div>
           <div><dt><Kbd>?</Kbd></dt><dd>{t("Düzenleyicide tüm kısayollar")}</dd></div>
         </dl>
       </section>

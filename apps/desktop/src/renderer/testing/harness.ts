@@ -11,7 +11,14 @@ import type { EditorStore } from '../state/editor-store';
 import { synthesizeRecording, type SyntheticRecording } from '../smoke-fixtures';
 import { checkExportSupport, runExport, type ExportProgress, type ExportSupport } from '../export/exporter';
 
-export interface Check { name: string; ok: boolean; detail?: string; ms?: number }
+/**
+ * One check of a suite. `known`: a failure already known and accepted for now (the reason): it is
+ * reported as "bilinen sorun" and does not fail the run.
+ */
+export interface Check { name: string; ok: boolean; detail?: string; ms?: number; known?: string }
+
+/** A suite passes when every check passed or failed only as a known issue. */
+export const passed = (checks: readonly Check[]): boolean => checks.every((c) => c.ok || !!c.known);
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 export const frame = (): Promise<number> => new Promise((r) => requestAnimationFrame(r));
@@ -127,6 +134,17 @@ export const text = (el: Element | null | undefined): string => (el?.textContent
 export function button(name: string, root: ParentNode = document): HTMLButtonElement | null {
   return all<HTMLButtonElement>('button', root).find((b) => !b.disabled && b.offsetParent !== null && (text(b) === name || b.getAttribute('aria-label') === name)) ?? null;
 }
+
+/**
+ * A button whose accessible name or text starts with `name` ("Geri al" finds "Geri al (⌘Z)" on a Mac
+ * and "Geri al (Ctrl+Z)" on Windows): the shortcut part of a label differs per platform.
+ */
+export function buttonStarting(name: string, root: ParentNode = document): HTMLButtonElement | null {
+  return all<HTMLButtonElement>('button', root).find((b) => !b.disabled && b.offsetParent !== null && ((b.getAttribute('aria-label') ?? '').startsWith(name) || text(b).startsWith(name))) ?? null;
+}
+
+/** The platform's command key for shortcuts: ⌘ on a Mac, Ctrl elsewhere (as the app's shortcuts expect). */
+export const commandKey = (): KeyboardEventInit => (navigator.platform.toLowerCase().startsWith('mac') ? { metaKey: true } : { ctrlKey: true });
 
 /** An option of a segmented control (role=radio) by the group's name and the option's text. */
 export function option(group: string, name: string, root: ParentNode = document): HTMLButtonElement | null {

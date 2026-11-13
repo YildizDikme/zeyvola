@@ -20,7 +20,15 @@ param(
   [Parameter(Mandatory = $true)][string]$Out,
   # The development electron.exe keeps the DLL under its real name: it is loaded before the answer
   # there, as expected; only the dialog and its answers are judged. The package sets it aside.
-  [switch]$Development
+  [switch]$Development,
+  # The app's own language setting for every scenario (settings.json in the throwaway userData),
+  # as a user who picked it under Settings; 'auto' follows Windows' display language.
+  [ValidateSet('auto', 'tr', 'en')][string]$Language = 'auto',
+  # What the dialog must say (UTF-8 from the caller): its title and its three buttons, '|'-separated.
+  [string]$ExpectTitle,
+  [string]$ExpectButtons,
+  # Only these scenarios (comma-separated); all when empty.
+  [string]$Only
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
@@ -113,6 +121,12 @@ function PressByKeys($dialog, [string]$which) {
 function Answer($r, $dialog, [string]$which) {
   $btn = WaitButtons $dialog
   $r.buttons = @($btn | ForEach-Object { $_.Current.Name })
+  $r.dialogTitle = $dialog.Current.Name
+  if ($ExpectTitle -or $ExpectButtons) {
+    $want = @($ExpectButtons -split '\|')
+    $r.textsAsExpected = ((-not $ExpectTitle) -or $r.dialogTitle -eq $ExpectTitle) -and ((-not $ExpectButtons) -or (($r.buttons -join '|') -eq ($want -join '|')))
+    if (-not $r.textsAsExpected) { $r.notes += "metin beklenenden farkli: baslik '$($r.dialogTitle)', dugmeler '$($r.buttons -join '|')'" }
+  }
   if ($btn.Count -ge 3) {
     $r.answeredBy = Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]
     # Still open after 5 s: answer with the keyboard instead (Escape / Shift+Tab, Space).
@@ -126,6 +140,11 @@ function Answer($r, $dialog, [string]$which) {
 }
 function Start-App([string]$exePath, [string]$th) {
   $script:CurrentExe = $exePath
+  if ($Language -ne 'auto') {
+    New-Item -ItemType Directory -Force -Path (Join-Path $th 'userData') | Out-Null
+    $json = '{ "language": "' + $Language + '" }'
+    [System.IO.File]::WriteAllText((Join-Path $th 'userData\settings.json'), $json, (New-Object System.Text.UTF8Encoding($false)))
+  }
   $env:ZEYVOLA_TEST_HOME = $th
   $argList = @(); if ($AppArg) { $argList += '"' + $AppArg + '"' }
   if ($argList.Count) { Start-Process -FilePath $exePath -ArgumentList $argList -PassThru } else { Start-Process -FilePath $exePath -PassThru }
@@ -143,6 +162,7 @@ function Shot([string]$name) {
   } catch { }
 }
 function Scenario([string]$name, [scriptblock]$body) {
+  if ($Only -and -not (($Only -split ',') -contains $name)) { return }
   Write-Host "== $name"
   $r = [ordered]@{ scenario = $name; ok = $false; notes = @() }
   try { & $body $r } catch { $r.notes += "hata: $($_.Exception.Message)" }
@@ -176,7 +196,7 @@ Scenario 'decline' {
   $f = DllFiles $Exe
   # Declining leaves the DLL set aside (package) or where it was (development).
   $filesOk = $Development -or ($f.pending -and -not $f.active)
-  $r.ok = $r.exited -and -not $r.stateRecorded -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk -and @($r.windowsBeforeAnswer | Where-Object { -not $_.StartsWith('#32770|') }).Count -eq 0
+  $r.ok = ($r.textsAsExpected -ne $false) -and $r.exited -and -not $r.stateRecorded -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk -and @($r.windowsBeforeAnswer | Where-Object { -not $_.StartsWith('#32770|') }).Count -eq 0
   if ($r.dllLoadedBeforeAnswer) { $r.notes += 'uygulamanin yanindaki DLL yanit verilmeden yuklendi' }
   if (-not $filesOk) { $r.notes += "retten sonra DLL dosyalari: etkin $($f.active), beklemede $($f.pending)" }
   StopApp $Exe
@@ -206,7 +226,7 @@ Scenario 'accept' {
   $f = DllFiles $Exe
   # Accepting gives the DLL its real name (package); the restarted app loads that copy.
   $filesOk = $f.active -and -not $f.pending
-  $r.ok = $r.stateRecorded -and $r.relaunched -and -not $r.dialogAgain -and $r.dllLoadedAfter -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk
+  $r.ok = ($r.textsAsExpected -ne $false) -and $r.stateRecorded -and $r.relaunched -and -not $r.dialogAgain -and $r.dllLoadedAfter -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk
   if (-not $filesOk) { $r.notes += "kabulden sonra DLL dosyalari: etkin $($f.active), beklemede $($f.pending)" }
   if (-not $r.dllLoadedAfter) { $r.notes += 'kabulden sonra DLL yuklu degil (donanim hizlandirma acik mi?)' }
   StopApp $Exe
@@ -272,6 +292,7 @@ $termsFile = Get-ChildItem -Recurse -Path (Split-Path $Exe) -Filter 'MICROSOFT-D
 $summary = [ordered]@{
   exe = Split-Path $Exe -Leaf
   dllInPackage = $dllPresent
+  language = $Language
   systemHasD3dcompiler47 = Test-Path (Join-Path $env:WINDIR 'System32\d3dcompiler_47.dll')
   termsFileInPackage = [bool]$termsFile
   notAutomated = 'Kosullari oku dugmesi metni baska bir programda acar; otomatik denenmedi'

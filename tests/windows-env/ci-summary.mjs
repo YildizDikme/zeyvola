@@ -27,7 +27,7 @@ for (const f of files.filter((x) => x.endsWith('-report.json'))) {
   if (r.error) say(`hata: ${r.error}`);
   if (r.mp4Missing) say(`MP4 yazılamıyor: ${r.mp4Missing}`);
   if (r.mp4Unavailable) say(`MP4 yazılamıyor (arayüz): ${r.mp4Unavailable}`);
-  for (const c of checks) say(`${c.ok ? '✓' : '✗'} ${c.name}${c.detail ? ` — ${String(c.detail).slice(0, 600)}` : ''}`);
+  for (const c of checks) say(`${c.ok ? '✓' : c.known ? '⚠ BİLİNEN SORUN' : '✗'} ${c.name}${c.detail ? ` — ${String(c.detail).slice(0, 600)}` : ''}${!c.ok && c.known ? ` [${c.known}]` : ''}`);
   if (r.capabilities) { say('Yetenekler:'); for (const [k, v] of Object.entries(r.capabilities)) say(`  ${k}: ${v}`); }
   if (r.realCapture) say(`Gerçek kayıt: ${JSON.stringify(r.realCapture)}`);
   for (const c of r.captureShape ?? []) say(`Kayıt penceresinin biçim raporu: ${JSON.stringify(c)}`);

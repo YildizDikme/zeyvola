@@ -191,6 +191,21 @@ jobs:
         continue-on-error: true
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/out/mp4/win32-x64/Zeyvola.exe -Out "$env:OUT\packaged-terms"
 
+      # The terms dialog in Turkish: the app's own language setting (settings.json "language": "tr", as a
+      # user picks it under Settings), on a copy of the package with the DLL set aside again. Windows'
+      # display language stays English: a Turkish Windows needs a language pack, not installed here.
+      - name: Şartlar ekranı Türkçe (paket) / terms flow in Turkish (packaged)
+        id: pkg_terms_tr
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: |
+          $copy = Join-Path $env:RUNNER_TEMP 'zeyvola-terms-tr'
+          Remove-Item -Recurse -Force $copy -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Path apps/desktop/out/mp4/win32-x64 -Destination $copy
+          $active = Join-Path $copy 'd3dcompiler_47.dll'
+          if (Test-Path $active) { Move-Item $active "$active.terms-pending" -Force }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe (Join-Path $copy 'Zeyvola.exe') -Out "$env:OUT\packaged-terms-tr" -Language tr -Only 'decline,accept' -ExpectTitle 'Microsoft bileşeni koşulları' -ExpectButtons 'Kabul ediyorum|Koşulları oku|Kabul etmiyorum'
+
       - name: Duman testi (paket) / smoke (packaged)
         id: pkg_smoke
         if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
@@ -290,6 +305,7 @@ jobs:
             dev_nohelper=${{ steps.dev_nohelper.outcome }}
             pkg_webm=${{ steps.pkg_webm.outcome }}
             pkg_nodll=${{ steps.pkg_nodll.outcome }}
+            pkg_terms_tr=${{ steps.pkg_terms_tr.outcome }}
             pkg_smoke=${{ steps.pkg_smoke.outcome }}
             pkg_ui=${{ steps.pkg_ui.outcome }}
             pkg_terms=${{ steps.pkg_terms.outcome }}

@@ -4,6 +4,7 @@ import type { CaptureState } from '@zeyvola/protocol';
 import { api } from './api';
 import { initI18n, t, useLang } from './i18n';
 import { Icon } from './ui/icons';
+import { keyLabel, RECORDING_KEYS } from './ui/keys';
 import './styles/tokens.css';
 import './styles/hud.css';
 
@@ -34,10 +35,10 @@ function Hud() {
       <span className="level" aria-label={t("Mikrofon seviyesi")}><span style={{ transform: `scaleX(${Math.max(0.04, s.micLevel)})` }} /></span>
       <span className="sep" />
       {paused
-        ? <button type="button" className="hud-btn no-drag" onClick={() => void api.resumeCapture()} title={t("Devam et (⌥⇧P)")}><Icon name="play" size={16} /></button>
-        : <button type="button" className="hud-btn no-drag" onClick={() => void api.pauseCapture()} title={t("Duraklat (⌥⇧P)")} disabled={s.phase !== 'recording'}><Icon name="pause" size={16} /></button>}
-      <button type="button" className="hud-btn no-drag" onClick={() => void api.markCapture()} title={t("İşaret koy (⌥⇧M)")} disabled={s.phase !== 'recording'}><Icon name="marker" size={16} /></button>
-      <button type="button" className="hud-btn stop no-drag" onClick={() => void api.stopCapture()} title={t("Bitir (⌥⇧S)")} disabled={s.phase === 'finishing'}><Icon name="stop" size={16} /><span>{t("Bitir")}</span></button>
+        ? <button type="button" className="hud-btn no-drag" onClick={() => void api.resumeCapture()} title={t("Devam et ({key})", { key: keyLabel(RECORDING_KEYS.pause) })}><Icon name="play" size={16} /></button>
+        : <button type="button" className="hud-btn no-drag" onClick={() => void api.pauseCapture()} title={t("Duraklat ({key})", { key: keyLabel(RECORDING_KEYS.pause) })} disabled={s.phase !== 'recording'}><Icon name="pause" size={16} /></button>}
+      <button type="button" className="hud-btn no-drag" onClick={() => void api.markCapture()} title={t("İşaret koy ({key})", { key: keyLabel(RECORDING_KEYS.mark) })} disabled={s.phase !== 'recording'}><Icon name="marker" size={16} /></button>
+      <button type="button" className="hud-btn stop no-drag" onClick={() => void api.stopCapture()} title={t("Bitir ({key})", { key: keyLabel(RECORDING_KEYS.stop) })} disabled={s.phase === 'finishing'}><Icon name="stop" size={16} /><span>{t("Bitir")}</span></button>
       <button type="button" className="hud-btn no-drag" onClick={() => void api.cancelCapture()} title={t("İptal et")} disabled={s.phase === 'finishing'}><Icon name="close" size={15} /></button>
     </div>
   );
