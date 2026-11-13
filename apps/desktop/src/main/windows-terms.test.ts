@@ -1,4 +1,5 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -72,12 +73,18 @@ describe('Windows Microsoft terms', () => {
   it('reports the folder when the DLL cannot be renamed, and leaves the pending file alone', () => {
     const d = temp();
     writeFileSync(join(d, DLL_PENDING), 'dll');
-    chmodSync(d, 0o555);
+    // Windows ignores a folder's mode bits; there the same situation is a deny entry in the folder's
+    // access list (icacls, part of Windows): nobody may add a file to it, so the rename fails.
+    const win = process.platform === 'win32';
+    const icacls = (...args: string[]) => execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe'), [d, ...args], { stdio: 'ignore' });
+    if (win) icacls('/deny', '*S-1-1-0:(AD,WD)');
+    else chmodSync(d, 0o555);
     try {
       expect(activateDll(d)).toMatchObject({ ok: false, dir: d });
       expect(dllFiles(d)).toEqual({ active: false, pending: true });
     } finally {
-      chmodSync(d, 0o755);
+      if (win) icacls('/remove:d', '*S-1-1-0');
+      else chmodSync(d, 0o755);
     }
   });
 });

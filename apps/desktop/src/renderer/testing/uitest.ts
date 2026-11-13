@@ -29,7 +29,7 @@ import { avcProfileName, compareFrames, mp4Tracks, sharpness } from './mp4-stats
 import { t } from '../i18n';
 import { recordLikeBrowser } from '../smoke-fixtures';
 import {
-  all, button, click, cpuNow, cpuPercent, createSampleProject, currentEditor, decodeSound, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, screenshot, sleep, text, until, type Check,
+  all, button, click, cpuNow, cpuPercent, createSampleProject, currentEditor, decodeSound, exportsRel, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, routedExport, screenshot, sleep, text, until, type Check,
 } from './harness';
 
 export async function runUiTest(): Promise<unknown> {
@@ -183,6 +183,17 @@ export async function runUiTest(): Promise<unknown> {
     : ext === 'mp4' ? 'sistem sondası yok' : 'WebM: sistem sondası yok');
   const systemCheck = async (path: string): Promise<string> => describe(await systemProbe(path));
   // Shown with the system's separators; compared with '/' (Windows writes '\').
+  /**
+   * Presses the window's "Dışa aktar" once it can start: after any change (format, target, a
+   * finished or cancelled export) the window asks the encoders and the target again, and the button
+   * stays disabled until both answered.
+   */
+  const clickExport = async (): Promise<void> => {
+    const footer = () => q('.export-modal footer');
+    const ready = await until(() => (footer() ? button(t("Dışa aktar"), footer()!) : null), 20_000);
+    const state = footer() ? all<HTMLButtonElement>('button', footer()!).map((b) => `${text(b)}${b.disabled ? ' (devre dışı)' : ''}`).join(', ') : 'pencere yok';
+    click(ready, `penceredeki Dışa aktar (20 sn içinde basılabilir olmadı; alt çubuk: ${state})`);
+  };
   const donePath = (): string => (q('.export-done span')?.getAttribute('title') ?? '').replace(/\\/g, '/');
 
   await step(`Dışa aktarma: pencereden ${ext.toUpperCase()} 1080p30 dosyası alınır ve oynatılabilir`, async () => {
@@ -215,7 +226,7 @@ export async function runUiTest(): Promise<unknown> {
     }
     cpuBefore = await cpuNow();
     exportStart = performance.now();
-    click(button(t("Dışa aktar"), footer()), 'penceredeki Dışa aktar');
+    await clickExport();
     expect(await until(() => q('.export-progress .bar') || q('.export-done') || q('.export-progress .is-error'), 10_000, 20), 'ilerleme çubuğu görünmedi');
     const end = await until(() => q('.export-done') ?? q('.export-progress .is-error'), 150_000, 50);
     expect(end, 'dışa aktarma 150 sn içinde bitmedi');
@@ -293,7 +304,7 @@ export async function runUiTest(): Promise<unknown> {
     expect(await until(() => text(q('.export-target-text span')).endsWith('Seçilen klasör'), 3000), `seçilen klasör görünmüyor: "${text(q('.export-target-text span'))}"`);
     const shot = await screenshot('disa-aktarma-kayit-yeri', 200);
     if (shot) shots.push(shot);
-    click(button(t("Dışa aktar"), q('.export-modal footer')!), 'penceredeki Dışa aktar');
+    await clickExport();
     // The previous export's "Ready" line goes away first; only then wait for this one's.
     expect(await until(() => !q('.export-done'), 5000, 10), 'dışa aktarma başlamadı');
     const end = await until(() => q('.export-done') ?? q('.export-progress .is-error'), 150_000, 50);
@@ -312,7 +323,7 @@ export async function runUiTest(): Promise<unknown> {
   await step('Dışa aktarma: İptal yarım dosyayı siler, pencere yeniden kullanılabilir', async () => {
     const dialog = q('.export-modal');
     expect(dialog, 'dışa aktarma penceresi kapalı');
-    click(button(t("Dışa aktar"), q('.export-modal footer')!), 'penceredeki Dışa aktar');
+    await clickExport();
     click(await until(() => button(t("İptal"), dialog!), 5000, 10), 'İptal');
     expect(await until(() => text(q('.export-progress')).includes(t("İptal edildi; yarım dosya silindi.")), 15_000, 50), `iptal mesajı yok: "${text(q('.export-progress'))}"`);
     expect(!(await probeVideo(exportedUrl(2))).ok, 'iptal edilen dosya diskte kaldı');
@@ -370,13 +381,34 @@ export async function runUiTest(): Promise<unknown> {
       return realCapture.summary;
     });
     const rc = realCapture as RealCapture | null;
+    if (rc?.shape) {
+      // A known square (the click driver's) keeps its shape and its place in the recording.
+      const { expected: e, found: f, ratio, drawn } = rc.shape;
+      const near = (a: number, b: number) => Math.abs(a - b) < 0.012;
+      // Position and size as fractions of the frame stay right even in squeezed frames; the shape is
+      // judged as the app draws it (frames with the display's shape, or displayAspect applied).
+      checks.push({
+        name: 'Gerçek ekran kaydı: ekrandaki bilinen kare kayıtta (uygulamanın çizdiği haliyle) kare kalır, yeri ve boyutu doğru',
+        ok: !!f && drawn !== null && Math.abs(drawn - 1) < 0.02 && near(f.fx, e.fx) && near(f.fy, e.fy) && near(f.fw, e.fw) && near(f.fh, e.fh),
+        detail: f ? `çizilen en/boy ${drawn}, dosyanın karelerinde ${ratio}${rc.source?.displayAspect ? ` (displayAspect ${rc.source.displayAspect.toFixed(4)} saklandı)` : ''} (1 olmalı) · ekranda x ${e.fx.toFixed(3)} y ${e.fy.toFixed(3)} g ${e.fw.toFixed(3)} y ${e.fh.toFixed(3)} · videoda x ${f.fx.toFixed(3)} y ${f.fy.toFixed(3)} g ${f.fw.toFixed(3)} y ${f.fh.toFixed(3)}` : 'kare videoda bulunamadı',
+      });
+    }
+    if (rc?.exported) {
+      const x = rc.exported;
+      checks.push({
+        name: 'Gerçek ekran kaydı dışa aktarılınca (WebM 1080p) bilinen kare yine kare',
+        ok: 'ratio' in x && x.ratio !== null && Math.abs(x.ratio - 1) < 0.02,
+        detail: 'error' in x ? `dışa aktarma: ${x.error}` : x.found ? `en/boy ${x.ratio} (1 olmalı), videoda g ${x.found.fw.toFixed(3)} y ${x.found.fh.toFixed(3)}, ${x.seconds} sn` : 'kare dışa aktarılan videoda bulunamadı',
+      });
+    }
     if (rc?.screen && rc.display) {
       // A display recording must keep the display's shape (zoom targets and clicks are fractions of it).
       const { screen, display } = rc;
       checks.push({
-        name: 'Gerçek ekran kaydı: video ekranın en-boy oranında (kırpılmış ya da sıkıştırılmış değil)',
-        ok: Math.abs(screen.width / screen.height - display.w / display.h) < 0.02,
-        detail: `ekran ${display.w}×${display.h} (ölçek ${display.scale}), istenen (ideal) ${display.w * display.scale}×${display.h * display.scale}, kaynak kaydı (getSettings) ${rc.source?.width}×${rc.source?.height}, video ${screen.width}×${screen.height}, kenar bantları ${screen.bars ? `sol ${screen.bars.left} sağ ${screen.bars.right} üst ${screen.bars.top} alt ${screen.bars.bottom} px` : 'ölçülemedi'}`,
+        name: 'Gerçek ekran kaydı: video ekranın en-boy oranında, ya da kaynak ekranın gerçek oranını saklıyor (kırpılmış değil)',
+        ok: (Math.abs(screen.width / screen.height - display.w / display.h) < 0.02 || Math.abs((rc.source?.displayAspect ?? 0) - display.w / display.h) < 0.02)
+          && !!screen.bars && screen.bars.left + screen.bars.right + screen.bars.top + screen.bars.bottom === 0,
+        detail: `${rc.source?.displayAspect ? `kareler ${screen.width}×${screen.height}, saklanan oran ${rc.source.displayAspect.toFixed(4)} · ` : ''}ekran ${display.w}×${display.h} (ölçek ${display.scale}), istenen (ideal) ${display.w * display.scale}×${display.h * display.scale}, kaynak kaydı (getSettings) ${rc.source?.width}×${rc.source?.height}, video ${screen.width}×${screen.height}, kenar bantları ${screen.bars ? `sol ${screen.bars.left} sağ ${screen.bars.right} üst ${screen.bars.top} alt ${screen.bars.bottom} px` : 'ölçülemedi'}`,
       });
     }
   }
@@ -453,11 +485,21 @@ interface RealCapture {
   seconds: number;
   screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean; bars: Bars | null } | null;
   /** What the recording says about its screen video, and the display it recorded. */
-  source: { width?: number; height?: number; fps?: number; seconds: number } | null;
+  source: { width?: number; height?: number; fps?: number; seconds: number; displayAspect?: number } | null;
   display: { w: number; h: number; scale: number } | null;
   mic: { duration: number; peak: number } | null;
   cursor: { moves: number; downs: number; buttons: string };
   driver: { clicks: number; matched: number; worstOffset: number } | null;
+  /** The driver's 240 px magenta square: where it was on screen and where/how it shows in the video. */
+  /** ratio: in the file's frames; drawn: as the editor and the export draw it (displayAspect applied). */
+  shape: { expected: { fx: number; fy: number; fw: number; fh: number }; found: { fx: number; fy: number; fw: number; fh: number } | null; ratio: number | null; drawn: number | null } | null;
+  /** The recording exported (WebM 1080p, 16:9 frame): the same square's proportions there. */
+  exported: { seconds: number; ratio: number | null; found: { fx: number; fy: number; fw: number; fh: number } | null } | { error: string } | null;
+  /**
+   * What the recorder found about the screen track, when the app records it (asked of the capture
+   * code: capabilities, settings, the first frame's size, which attempt gave the right shape).
+   */
+  frameCheck: unknown;
 }
 
 /**
@@ -516,8 +558,31 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   // The driver's own log: where it clicked, as fractions of the primary display.
   const driverLog = await untilAsync(() => invoke<string | null>('smoke:realRecording', { op: 'readSignal', name: 'clicks.json' }), 8000);
   let driver: RealCapture['driver'] = null;
+  let shape: RealCapture['shape'] = null;
+  let exported: RealCapture['exported'] = null;
   if (driverLog) {
-    const clicks = (JSON.parse(driverLog) as { clicks: { fx: number; fy: number; button: string }[] }).clicks;
+    const log = JSON.parse(driverLog) as { clicks: { fx: number; fy: number; button: string }[]; shape?: { fx: number; fy: number; fw: number; fh: number } };
+    const clicks = log.clicks;
+    if (log.shape && src) {
+      const found = await magentaBox(url(src.file), 3);
+      // Square on screen → square in the picture: width / height of its box in video pixels.
+      const ratio = found && screen ? (found.fw * screen.width) / (found.fh * screen.height) : null;
+      // A source that kept the wrong frame shape carries the display's shape (displayAspect): the
+      // picture is drawn stretched back to it.
+      const drawn = ratio === null || !screen ? ratio : src.displayAspect ? ratio * (src.displayAspect / (screen.width / screen.height)) : ratio;
+      const r3 = (x: number | null) => (x === null ? null : Math.round(x * 1000) / 1000);
+      shape = { expected: { fx: log.shape.fx, fy: log.shape.fy, fw: log.shape.fw, fh: log.shape.fh }, found, ratio: r3(ratio), drawn: r3(drawn) };
+      // And in what the user gets: the recording exported as WebM 1080p (Chromium decodes it in
+      // every build). A 4:3 screen sits in the 16:9 frame; the square must still be a square.
+      const t0 = performance.now();
+      const r = await routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format: 'webm', resolution: '1080', fps: 30, quality: 'standard', includeAudio: false }, () => undefined, new AbortController().signal);
+      if (r.phase === 'done' && r.path) {
+        const box = await magentaBox(url(exportsRel(r.path)), 3);
+        exported = { seconds: Math.round((performance.now() - t0) / 100) / 10, found: box, ratio: box ? Math.round(((box.fw * 1920) / (box.fh * 1080)) * 1000) / 1000 : null };
+      } else {
+        exported = { error: r.message ?? r.phase };
+      }
+    }
     let matched = 0;
     let worst = 0;
     for (const c of clicks) {
@@ -537,10 +602,11 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     `imleç ${cursor.moves} konum, ${cursor.downs} tıklama (${cursor.buttons || '-'})`,
     driver ? `sürücü ${driver.clicks} tıklama, ${driver.matched} eşleşti (en büyük sapma ${driver.worstOffset})` : 'tıklama sürücüsü günlüğü yok',
   ].join(' · ');
-  const source = src ? { width: src.width, height: src.height, fps: src.fps, seconds: src.duration / TICKS_PER_SECOND } : null;
+  const source = src ? { width: src.width, height: src.height, fps: src.fps, seconds: src.duration / TICKS_PER_SECOND, ...(src.displayAspect ? { displayAspect: src.displayAspect } : {}) } : null;
   const b = display!.bounds;
   const out: RealCapture = {
-    summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, source,
+    summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, source, shape, exported,
+    frameCheck: (rec!.capture as unknown as { frameCheck?: unknown }).frameCheck ?? null,
     display: b ? { w: b.w, h: b.h, scale: display!.scaleFactor ?? 1 } : null, mic: micInfo, cursor, driver,
   };
   expect(screen, `ekran dosyası yok · ${summary}`);
@@ -550,6 +616,35 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   expect(cursor.moves > 0, `imleç günlüğü boş · ${summary}`);
   if (driver && web?.capabilities.clicks) expect(driver.matched === driver.clicks, `tıklamalar imleç günlüğünde eksik ya da yanlış yerde · ${summary}`);
   return out;
+}
+
+/** Box of the magenta pixels (the click driver's square) in a frame, as fractions of the frame. */
+async function magentaBox(src: string, at: number): Promise<{ fx: number; fy: number; fw: number; fh: number } | null> {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.crossOrigin = 'anonymous';
+  v.src = src;
+  const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
+  if (!ok) return null;
+  v.currentTime = at;
+  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
+  const w = v.videoWidth;
+  const h = v.videoHeight;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(v, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  v.removeAttribute('src');
+  v.load();
+  let x0 = w; let y0 = h; let x1 = -1; let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (d[i]! > 180 && d[i + 1]! < 90 && d[i + 2]! > 180) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    }
+  }
+  return x1 < 0 ? null : { fx: x0 / w, fy: y0 / h, fw: (x1 - x0 + 1) / w, fh: (y1 - y0 + 1) / h };
 }
 
 /** Uniform dark columns or rows at the frame's edges (letterbox/pillarbox), in pixels of the video. */

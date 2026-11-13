@@ -1447,8 +1447,20 @@ async function exportContextLoss(checks: Check[]): Promise<void> {
         const last = await probeVideo(url, seconds - 0.05);
         // Also proves that `gone` and exportPath find a written export (the other checks rely on it).
         const found = !(await gone(url));
-        const ok = found && result.phase === 'done' && losses === 1 && made.length >= 2 && Math.abs(after.duration - seconds) < 0.15 && after.spread > 0.02 && last.spread > 0.02;
-        checks.push({ name, ok, detail: `${result.phase}${result.message ? `: ${result.message}` : ''}${found ? '' : ', dosya exports/ içinde bulunamadı'}; ${losses} kayıp (${lostAtFrame}. kare), ${made.length} bağlam açıldı, kayıptan sonraki kare yayılımı ${after.spread.toFixed(3)}, son kare ${last.spread.toFixed(3)}, ${after.duration.toFixed(2)} sn` });
+        let pictureOk = Math.abs(after.duration - seconds) < 0.15 && after.spread > 0.02 && last.spread > 0.02;
+        let picture = `kayıptan sonraki kare yayılımı ${after.spread.toFixed(3)}, son kare ${last.spread.toFixed(3)}, ${after.duration.toFixed(2)} sn`;
+        // A Chromium without a decoder for the written MP4 (the package's, without a graphics card)
+        // shows no frame: the system's decoders then decode every frame (none may be missing or blank).
+        if (!(after.spread >= 0) && result.path && result.support?.ok && result.support.written === 'mp4') {
+          const sys = await window.zeyvola.invoke('smoke:avCheck', { path: result.path, duration: seconds }) as SystemProbe & { video: { decodedFrames?: number; spread?: number } | null };
+          if (!sys.skipped) {
+            const frames = sys.video?.decodedFrames ?? 0;
+            pictureOk = sys.ok && frames >= Math.round(seconds * 30) - 1 && (sys.video?.spread ?? 0) > 0.02;
+            picture = `Chromium bu MP4'ü çözemiyor; ${sys.engine}: ${frames} kare çözüldü, en büyük yayılım ${(sys.video?.spread ?? 0).toFixed(3)}, ${sys.duration.toFixed(2)} sn${sys.ok ? '' : ` · ${sys.problems.join('; ')}`}`;
+          }
+        }
+        const ok = found && result.phase === 'done' && losses === 1 && made.length >= 2 && pictureOk;
+        checks.push({ name, ok, detail: `${result.phase}${result.message ? `: ${result.message}` : ''}${found ? '' : ', dosya exports/ içinde bulunamadı'}; ${losses} kayıp (${lostAtFrame}. kare), ${made.length} bağlam açıldı, ${picture}` });
       } else {
         const left = !(await gone(url));
         const ok = result.phase === 'error' && !!result.message && !left;

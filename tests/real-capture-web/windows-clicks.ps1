@@ -35,7 +35,23 @@ while (-not (Test-Path $started)) {
   if ((Get-Date) -gt $deadline) { Write-Host 'windows-clicks: kayit baslamadi'; exit 1 }
   Start-Sleep -Milliseconds 100
 }
-Start-Sleep -Milliseconds 300
+# A known shape on top of everything while the display is recorded: a 240 x 240 px magenta square
+# on black, in the middle of the screen. The test measures its proportions in the video, so a picture
+# squeezed or stretched by the recording shows.
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$size = 240
+$form = New-Object System.Windows.Forms.Form
+$form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.StartPosition = 'Manual'
+$form.BackColor = [System.Drawing.Color]::Black
+$form.Bounds = New-Object System.Drawing.Rectangle([int](($w - $size - 40) / 2), [int](($h - $size - 40) / 2), ($size + 40), ($size + 40))
+$panel = New-Object System.Windows.Forms.Panel
+$panel.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 0, 255)
+$panel.Bounds = New-Object System.Drawing.Rectangle(20, 20, $size, $size)
+$form.Controls.Add($panel)
+$form.Show()
+$shapeAt = $form.PointToScreen($panel.Location)
+function Pump([int]$ms) { $end = (Get-Date).AddMilliseconds($ms); while ((Get-Date) -lt $end) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 15 } }
+Pump 500
 # left down/up 0x2/0x4, right down/up 0x8/0x10
 $plan = @(
   @{ fx = 0.25; fy = 0.30; b = 'l' }, @{ fx = 0.75; fy = 0.30; b = 'l' }, @{ fx = 0.50; fy = 0.50; b = 'r' },
@@ -46,19 +62,24 @@ foreach ($c in $plan) {
   if (Test-Path $stopped) { break }
   $x = [int]($c.fx * $w); $y = [int]($c.fy * $h)
   [void][ZeyvolaMouse]::SetCursorPos($x, $y)
-  Start-Sleep -Milliseconds 150
+  Pump 150
   $down = if ($c.b -eq 'r') { 0x8 } else { 0x2 }
   [ZeyvolaMouse]::mouse_event($down, 0, 0, 0, [IntPtr]::Zero)
   $at = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-  Start-Sleep -Milliseconds 60
+  Pump 60
   [ZeyvolaMouse]::mouse_event($down * 2, 0, 0, 0, [IntPtr]::Zero)
   $clicks += [ordered]@{ fx = $x / $w; fy = $y / $h; button = $c.b; epochMs = $at }
-  Start-Sleep -Milliseconds 600
+  Pump 600
 }
 # Escape closes the desktop menu the right click may have opened (key up flag 0x2).
 [ZeyvolaMouse]::keybd_event(0x1B, 0, 0, [IntPtr]::Zero)
 [ZeyvolaMouse]::keybd_event(0x1B, 0, 0x2, [IntPtr]::Zero)
-$json = [ordered]@{ screen = @{ width = $w; height = $h }; clicks = $clicks } | ConvertTo-Json -Depth 4 -Compress
+# Keep the square up until the recording ends.
+$deadline2 = (Get-Date).AddSeconds(20)
+while (-not (Test-Path $stopped) -and (Get-Date) -lt $deadline2) { Pump 200 }
+$form.Close()
+$shape = [ordered]@{ x = $shapeAt.X; y = $shapeAt.Y; size = $size; fx = $shapeAt.X / $w; fy = $shapeAt.Y / $h; fw = $size / $w; fh = $size / $h }
+$json = [ordered]@{ screen = @{ width = $w; height = $h }; clicks = $clicks; shape = $shape } | ConvertTo-Json -Depth 4 -Compress
 [System.IO.File]::WriteAllText((Join-Path $SignalDir 'clicks.json'), $json, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "windows-clicks: $($clicks.Count) tiklama ($w x $h)"
 exit 0

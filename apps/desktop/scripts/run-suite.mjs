@@ -224,6 +224,18 @@ if (suite === 'smoke' && report.capabilities) {
   console.log('\nYetenekler (WebCodecs, MediaRecorder):');
   for (const [k, v] of Object.entries(report.capabilities)) console.log(`  ${pad(k, 34)} ${v}`);
 }
+// The capture window's shape report (renderer/capture.ts, "[zeyvola:capture-shape] {…}"): what the
+// browser offered and delivered for the screen track, and which correction helped. Sizes only.
+report.captureShape = log.split('\n').flatMap((l) => {
+  const m = /\[zeyvola:capture-shape\] (\{.*\})/.exec(l);
+  if (!m) return [];
+  let j = m[1];
+  // Chromium's console line ends with `", source: …`; keep the JSON object only.
+  for (let end = j.length; end > 0; end = j.lastIndexOf('}', end - 1)) {
+    try { return [JSON.parse(j.slice(0, end + 1))]; } catch { /* shorter */ }
+  }
+  return [];
+});
 // Part of every suite's verdict: a run that started OpenH264 fails, whatever the app reported.
 report.checks = [...(report.checks ?? []), { name: 'OpenH264 hiç başlatılmadı (uygulama günlüğünde [OpenH264] satırı yok)', ok: openH264Lines === 0, detail: `${openH264Lines} satır` }];
 report.ok = report.ok && openH264Lines === 0;

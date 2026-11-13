@@ -19,8 +19,10 @@ $bundled = Join-Path (Split-Path $Exe) 'd3dcompiler_47.dll'
 $system = Join-Path $env:WINDIR 'System32\d3dcompiler_47.dll'
 function Version([string]$p) {
   if (-not (Test-Path $p)) { return $null }
+  # [pscustomobject]: Windows PowerShell 5.1 writes a nested [ordered] table as an empty object.
   $v = (Get-Item $p).VersionInfo
-  [ordered]@{ path = $p; fileVersion = $v.FileVersion; productVersion = $v.ProductVersion; bytes = (Get-Item $p).Length; sha256 = (Get-FileHash $p -Algorithm SHA256).Hash.ToLower() }
+  $hash = try { (Get-FileHash $p -Algorithm SHA256 -ErrorAction Stop).Hash.ToLower() } catch { "okunamadi: $($_.Exception.Message)" }
+  [pscustomobject]@{ path = $p; fileVersion = $v.FileVersion; productVersion = $v.ProductVersion; bytes = (Get-Item $p).Length; sha256 = $hash }
 }
 function TypeOf($p) {
   try { $c = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine; if ($c -match '--type=([\w-]+)') { $Matches[1] } else { 'browser' } } catch { '?' }
@@ -41,7 +43,7 @@ while ((Get-Date) -lt $deadline) {
       try {
         foreach ($m in ($p.Modules | Where-Object { $_.ModuleName -ieq 'd3dcompiler_47.dll' })) {
           $key = "$t|$($m.FileName)"
-          if (-not $seen.ContainsKey($key)) { $seen[$key] = [ordered]@{ process = $t; path = $m.FileName; bundled = ($m.FileName -ieq $bundled); system = ($m.FileName -ieq $system); firstSeen = (Get-Date).ToString('o') } }
+          if (-not $seen.ContainsKey($key)) { $seen[$key] = [pscustomobject]@{ process = $t; path = $m.FileName; bundled = ($m.FileName -ieq $bundled); system = ($m.FileName -ieq $system); firstSeen = (Get-Date).ToString('o') } }
         }
       } catch { }
     }
@@ -51,11 +53,12 @@ while ((Get-Date) -lt $deadline) {
   }
   Start-Sleep -Milliseconds 1000
 }
-$result = [ordered]@{
+$result = [pscustomobject]@{
   exe = $Exe
   appStarted = $started
   processTypes = @($types.Keys | Sort-Object)
   bundledCopy = Version $bundled
+  bundledPending = Version "$bundled.terms-pending"
   systemCopy = Version $system
   loaded = @($seen.Values)
 }
