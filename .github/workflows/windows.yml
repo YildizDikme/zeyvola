@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 75
     env:
       ZEYVOLA_DIST: mp4
+      # The app's own test timeout: exports run at a few frames per second here (no graphics card).
+      ZEYVOLA_TEST_TIMEOUT_MIN: '20'
       OUT: ${{ github.workspace }}\out-ci
       # Electron's download cache (electron/install.js, tools/electron-artifacts.mjs), outside the checkout.
       # actions/cache refuses paths with '..'; .cache/ is git-ignored.
@@ -124,12 +126,8 @@ jobs:
         continue-on-error: true
         run: pnpm test
 
-      # Development Electron (official build, with its own codecs). Builds the app first.
-      - name: Duman testi (geliştirme) / smoke (development Electron)
-        id: dev_smoke
-        continue-on-error: true
-        run: node apps/desktop/scripts/run-suite.mjs smoke --out "$env:OUT\dev" --timeout 15
-
+      # The development runs below use the app built by the packaging step (dist). The smoke test runs
+      # on the package (with and without its Microsoft DLL); a development smoke run would repeat it.
       # The interface test, ending with a real screen recording through Chromium while
       # windows-clicks.ps1 clicks on the desktop.
       - name: Arayüz testi + gerçek kayıt (geliştirme) / uitest + real capture (development)
@@ -143,17 +141,19 @@ jobs:
           $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
           # No graphics card here: MP4 must go through Windows' Media Foundation encoders (route 2).
           $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'mf'
-          node apps/desktop/scripts/run-suite.mjs ui --no-build --out "$env:OUT\dev" --timeout 15
+          node apps/desktop/scripts/run-suite.mjs ui --single --no-build --out "$env:OUT\dev" --timeout 25
           $code = $LASTEXITCODE
           Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
           Copy-Item (Join-Path $sig 'clicks.json') "$env:OUT\dev\uitest-clicks.json" -ErrorAction SilentlyContinue
           exit $code
 
-      # Microsoft d3dcompiler_47.dll terms on first start (the development electron.exe ships the DLL too).
+      # Microsoft d3dcompiler_47.dll terms on first start with the development electron.exe, whose DLL is
+      # under its real name (not set aside like in the package): the dialog and its answers are checked,
+      # the DLL being loaded before the answer is expected there. The package's own check is below.
       - name: Şartlar ekranı (geliştirme) / terms flow (development)
         id: dev_terms
         continue-on-error: true
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/node_modules/electron/dist/electron.exe -AppArg "$env:GITHUB_WORKSPACE\apps\desktop" -Out "$env:OUT\dev-terms"
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/node_modules/electron/dist/electron.exe -AppArg "$env:GITHUB_WORKSPACE\apps\desktop" -Out "$env:OUT\dev-terms" -Development
 
             # Route 2 unavailable: the development app without its helper (renamed for this step only) must
       # write WebM instead of MP4 and say so (route 3). Export steps only.
@@ -182,11 +182,28 @@ jobs:
           path: ${{ env.electron_config_cache }}
           key: electron-zig-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tools/zig-fetch.mjs') }}
 
+      # The package ships the Microsoft DLL as d3dcompiler_47.dll.terms-pending; accepting the terms
+      # gives it its real name (windows-terms.ts). This runs first, so the steps after it test the
+      # package as it is once accepted. Decline, accept + restart, accepted, update, no DLL.
+      - name: Şartlar ekranı (paket) / terms flow (packaged)
+        id: pkg_terms
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/out/mp4/win32-x64/Zeyvola.exe -Out "$env:OUT\packaged-terms"
+
       - name: Duman testi (paket) / smoke (packaged)
         id: pkg_smoke
         if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
         continue-on-error: true
-        run: node apps/desktop/scripts/run-suite.mjs smoke --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 15
+        # dll-watch.ps1 records which d3dcompiler_47.dll the app's processes load meanwhile (path, type, version).
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:OUT\packaged" | Out-Null
+          $exe = (Resolve-Path apps/desktop/out/mp4/win32-x64/Zeyvola.exe).Path
+          $watch = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/windows-terms/dll-watch.ps1', '-Exe', $exe, '-Out', "$env:OUT\packaged\dll-watch-smoke.json")
+          node apps/desktop/scripts/run-suite.mjs smoke --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 25
+          $code = $LASTEXITCODE
+          $watch | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
+          exit $code
 
       - name: Arayüz testi + gerçek kayıt (paket) / uitest + real capture (packaged)
         id: pkg_ui
@@ -199,7 +216,7 @@ jobs:
           $env:ZEYVOLA_TEST_REAL_CAPTURE = '1'
           $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
           $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'mf'
-          node apps/desktop/scripts/run-suite.mjs ui --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 15
+          node apps/desktop/scripts/run-suite.mjs ui --single --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 25
           $code = $LASTEXITCODE
           Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
           Copy-Item (Join-Path $sig 'clicks.json') "$env:OUT\packaged\uitest-clicks.json" -ErrorAction SilentlyContinue
@@ -217,11 +234,30 @@ jobs:
           $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'webm-fallback'
           node apps/desktop/scripts/run-suite.mjs ui --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged-webm" --timeout 10
 
-      - name: Şartlar ekranı (paket) / terms flow (packaged)
-        id: pkg_terms
+      # A copy of the package without the bundled d3dcompiler_47.dll (System32 is not touched): no terms
+      # dialog, and the whole smoke test; which d3dcompiler_47.dll is loaded instead, and its version.
+      - name: DLL'siz paket / package without d3dcompiler_47.dll
+        id: pkg_nodll
         if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
         continue-on-error: true
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/out/mp4/win32-x64/Zeyvola.exe -Out "$env:OUT\packaged-terms"
+        run: |
+          $copy = Join-Path $env:RUNNER_TEMP 'zeyvola-nodll'
+          Remove-Item -Recurse -Force $copy -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Path apps/desktop/out/mp4/win32-x64 -Destination $copy
+          # Under its real name after the accepted terms above, or still pending; both are removed.
+          $dll = @('d3dcompiler_47.dll', 'd3dcompiler_47.dll.terms-pending') | ForEach-Object { Join-Path $copy $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path "$env:OUT\packaged-nodll" | Out-Null
+          if ($dll) {
+            $v = (Get-Item $dll).VersionInfo
+            [ordered]@{ removedCopy = [ordered]@{ name = (Split-Path $dll -Leaf); fileVersion = $v.FileVersion; productVersion = $v.ProductVersion; sha256 = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLower() } } | ConvertTo-Json | Set-Content -Encoding UTF8 "$env:OUT\packaged-nodll\removed-dll.json"
+          }
+          Remove-Item (Join-Path $copy 'd3dcompiler_47.dll'), (Join-Path $copy 'd3dcompiler_47.dll.terms-pending') -ErrorAction SilentlyContinue
+          $exe = Join-Path $copy 'Zeyvola.exe'
+          $watch = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/windows-terms/dll-watch.ps1', '-Exe', $exe, '-Out', "$env:OUT\packaged-nodll\dll-watch-smoke.json")
+          node apps/desktop/scripts/run-suite.mjs smoke --app $copy --out "$env:OUT\packaged-nodll" --timeout 25
+          $code = $LASTEXITCODE
+          $watch | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
+          exit $code
 
       # The findings in the log and the job summary, so they survive a failed artifact upload.
       - name: Özet / summary
@@ -246,7 +282,6 @@ jobs:
             env=${{ steps.env.outcome }}
             typecheck=${{ steps.typecheck.outcome }}
             unit=${{ steps.unit.outcome }}
-            dev_smoke=${{ steps.dev_smoke.outcome }}
             dev_ui=${{ steps.dev_ui.outcome }}
             dev_terms=${{ steps.dev_terms.outcome }}
             zig=${{ steps.zig.outcome }}
@@ -254,6 +289,7 @@ jobs:
             helper_probe=${{ steps.helper_probe.outcome }}
             dev_nohelper=${{ steps.dev_nohelper.outcome }}
             pkg_webm=${{ steps.pkg_webm.outcome }}
+            pkg_nodll=${{ steps.pkg_nodll.outcome }}
             pkg_smoke=${{ steps.pkg_smoke.outcome }}
             pkg_ui=${{ steps.pkg_ui.outcome }}
             pkg_terms=${{ steps.pkg_terms.outcome }}

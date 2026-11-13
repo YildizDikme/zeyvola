@@ -17,7 +17,10 @@
 param(
   [Parameter(Mandatory = $true)][string]$Exe,
   [string]$AppArg,
-  [Parameter(Mandatory = $true)][string]$Out
+  [Parameter(Mandatory = $true)][string]$Out,
+  # The development electron.exe keeps the DLL under its real name: it is loaded before the answer
+  # there, as expected; only the dialog and its answers are judged. The package sets it aside.
+  [switch]$Development
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
@@ -50,6 +53,12 @@ function DllUse([string]$exePath) {
     } catch { }
   }
   return , $use
+}
+# How the Microsoft DLL lies next to the app: under its own name, or set aside until the terms
+# are accepted (d3dcompiler_47.dll.terms-pending).
+function DllFiles([string]$exePath) {
+  $d = Split-Path $exePath
+  [ordered]@{ active = (Test-Path (Join-Path $d 'd3dcompiler_47.dll')); pending = (Test-Path (Join-Path $d 'd3dcompiler_47.dll.terms-pending')) }
 }
 function DllLoaded([string]$exePath) { @((DllUse $exePath) | Where-Object { $_.bundled }).Count -gt 0 }
 # Top-level windows of the app's processes: dialogs (#32770) and app windows.
@@ -137,13 +146,14 @@ function Scenario([string]$name, [scriptblock]$body) {
   Write-Host "== $name"
   $r = [ordered]@{ scenario = $name; ok = $false; notes = @() }
   try { & $body $r } catch { $r.notes += "hata: $($_.Exception.Message)" }
+  $r.dllFilesAfter = DllFiles $(if ($r.exeUsed) { $r.exeUsed } else { $Exe })
   $script:results += $r
   Write-Host ("   {0} {1}" -f $(if ($r.ok) { 'OK ' } else { 'FAIL' }), ($r.notes -join ' | '))
 }
 
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ("zeyvola-terms-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
-$dllPresent = Test-Path (Join-Path (Split-Path $Exe) 'd3dcompiler_47.dll')
+$dllPresent = DllFiles $Exe  # before any scenario: real name, or set aside (.terms-pending)
 StopApp $Exe
 
 Scenario 'decline' {
@@ -163,8 +173,12 @@ Scenario 'decline' {
   $gone = WaitFor { if ((AppProcesses $Exe).Count -eq 0) { $true } } 20
   $r.exited = [bool]$gone
   $r.stateRecorded = Test-Path (StateFile $th)
-  $r.ok = $r.exited -and -not $r.stateRecorded -and -not $r.dllLoadedBeforeAnswer -and @($r.windowsBeforeAnswer | Where-Object { -not $_.StartsWith('#32770|') }).Count -eq 0
-  if ($r.dllLoadedBeforeAnswer) { $r.notes += 'DLL yanit verilmeden yuklendi' }
+  $f = DllFiles $Exe
+  # Declining leaves the DLL set aside (package) or where it was (development).
+  $filesOk = $Development -or ($f.pending -and -not $f.active)
+  $r.ok = $r.exited -and -not $r.stateRecorded -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk -and @($r.windowsBeforeAnswer | Where-Object { -not $_.StartsWith('#32770|') }).Count -eq 0
+  if ($r.dllLoadedBeforeAnswer) { $r.notes += 'uygulamanin yanindaki DLL yanit verilmeden yuklendi' }
+  if (-not $filesOk) { $r.notes += "retten sonra DLL dosyalari: etkin $($f.active), beklemede $($f.pending)" }
   StopApp $Exe
 }
 
@@ -189,7 +203,11 @@ Scenario 'accept' {
   $r.dllUseAfter = DllUse $Exe
   $r.dllLoadedAfter = DllLoaded $Exe
   Shot 'terms-after-accept'
-  $r.ok = $r.stateRecorded -and $r.relaunched -and -not $r.dialogAgain -and $r.dllLoadedAfter -and -not $r.dllLoadedBeforeAnswer
+  $f = DllFiles $Exe
+  # Accepting gives the DLL its real name (package); the restarted app loads that copy.
+  $filesOk = $f.active -and -not $f.pending
+  $r.ok = $r.stateRecorded -and $r.relaunched -and -not $r.dialogAgain -and $r.dllLoadedAfter -and ($Development -or -not $r.dllLoadedBeforeAnswer) -and $filesOk
+  if (-not $filesOk) { $r.notes += "kabulden sonra DLL dosyalari: etkin $($f.active), beklemede $($f.pending)" }
   if (-not $r.dllLoadedAfter) { $r.notes += 'kabulden sonra DLL yuklu degil (donanim hizlandirma acik mi?)' }
   StopApp $Exe
   $script:acceptedHome = $th
@@ -206,17 +224,45 @@ Scenario 'accepted' {
   StopApp $Exe
 }
 
+# An update after acceptance: the new version brings its DLL set aside again; with the acceptance
+# on record the app puts it in place by itself (no dialog) and starts again with it.
+Scenario 'update' {
+  param($r)
+  if (-not $script:acceptedHome) { $r.notes += 'accept senaryosu kaydi birakmadi'; return }
+  if ($Development) { $r.ok = $true; $r.notes += 'gelistirme: DLL beklemede adiyla gelmiyor, atlandi'; return }
+  $copy = Join-Path $work 'app-update'
+  Copy-Item -Recurse -Path (Split-Path $Exe) -Destination $copy
+  $active = Join-Path $copy 'd3dcompiler_47.dll'
+  if (Test-Path $active) { Move-Item $active (Join-Path $copy 'd3dcompiler_47.dll.terms-pending') -Force }
+  $exe2 = Join-Path $copy (Split-Path $Exe -Leaf)
+  $r.exeUsed = $exe2
+  $r.dllFilesBefore = DllFiles $exe2
+  $p = Start-App $exe2 $script:acceptedHome
+  $main = WaitFor { MainWindow $exe2 } 60
+  $r.mainWindow = [bool]$main
+  $r.dialog = [bool](Dialog $exe2)
+  Start-Sleep -Seconds 3
+  $r.dllUseAfter = DllUse $exe2
+  $f = DllFiles $exe2
+  $r.ok = $r.mainWindow -and -not $r.dialog -and $f.active -and -not $f.pending -and (@($r.dllUseAfter | Where-Object { $_.bundled }).Count -gt 0)
+  StopApp $exe2
+}
+
 Scenario 'no-dll' {
   param($r)
   $copy = Join-Path $work 'app-without-dll'
   Copy-Item -Recurse -Path (Split-Path $Exe) -Destination $copy
-  Remove-Item (Join-Path $copy 'd3dcompiler_47.dll') -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $copy 'd3dcompiler_47.dll'), (Join-Path $copy 'd3dcompiler_47.dll.terms-pending') -ErrorAction SilentlyContinue
   $exe2 = Join-Path $copy (Split-Path $Exe -Leaf)
+  $r.exeUsed = $exe2
   $th = Join-Path $work 'no-dll'
   $p = Start-App $exe2 $th
   $main = WaitFor { MainWindow $exe2 } 60
   $r.mainWindow = [bool]$main
   $r.dialog = [bool](Dialog $exe2)
+  Start-Sleep -Seconds 3
+  # Without the bundled copy: which d3dcompiler_47.dll (if any) Chromium loads instead.
+  $r.dllUse = DllUse $exe2
   $r.stateRecorded = Test-Path (StateFile $th)
   $r.ok = $r.mainWindow -and -not $r.dialog -and -not $r.stateRecorded
   StopApp $exe2

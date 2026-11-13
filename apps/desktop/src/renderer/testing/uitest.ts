@@ -186,6 +186,9 @@ export async function runUiTest(): Promise<unknown> {
   const donePath = (): string => (q('.export-done span')?.getAttribute('title') ?? '').replace(/\\/g, '/');
 
   await step(`Dışa aktarma: pencereden ${ext.toUpperCase()} 1080p30 dosyası alınır ve oynatılabilir`, async () => {
+    // Export-only runs skip the editing steps: the first automatic zoom suggestions must have arrived
+    // (and been saved) before the export, or the file and the reference frame show different projects.
+    if (!editing) await until(() => autoZooms() > 0, 12_000);
     await until(() => store.getState().save === 'saved', 5000);
     click(button(t("Dışa aktar"), q('.topbar-right')!), 'üst çubuktaki Dışa aktar');
     const dialog = await until(() => q('.export-modal'), 3000);
@@ -647,6 +650,11 @@ async function pictureQuality(store: EditorStore, url: string, at: number): Prom
   const decoded = await pixels(v);
   v.removeAttribute('src');
   v.load();
+  // A Chromium without a decoder for this file (the package's, without a graphics card) hands out a
+  // black frame: that is no measurement of the file.
+  let sum = 0;
+  for (let i = 0; i < decoded.length; i += 4) sum += decoded[i]! + decoded[i + 1]! + decoded[i + 2]!;
+  if (sum / (decoded.length / 4) / 3 < 4 && sharpness(decoded, W, H) === 0) throw new Error('Chromium bu dosyanın karesini çözemedi (siyah kare); dosya sistem sondasıyla denetlendi');
   const s = store.getState();
   const jpeg = await renderStill(store.project, s.cursors, s.mediaBase, secondsToTicks(shown), 'v_16x9', { width: W, height: H });
   const img = new Image();

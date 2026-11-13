@@ -627,10 +627,13 @@ async function boot(): Promise<void> {
   // Recordings left behind by a recorder or app that stopped mid-recording.
   if (!SMOKE) void capture.recoverAbandoned().catch((e) => process.stderr.write(`Kurtarma taraması başarısız: ${String(e)}\n`));
   if (SMOKE) {
+    // ZEYVOLA_TEST_TIMEOUT_MIN: slower machines (a CI runner without a graphics card exports at a few
+    // frames per second) get more time; the default fits a desktop.
+    const minutes = Number(process.env.ZEYVOLA_TEST_TIMEOUT_MIN);
     setTimeout(() => {
       process.stdout.write('SMOKE_REPORT {"ok":false,"error":"timeout"}\n');
       app.exit(2);
-    }, SUITE === 'smoke' ? 240_000 : 420_000);
+    }, minutes > 0 ? minutes * 60_000 : SUITE === 'smoke' ? 240_000 : 420_000);
   }
 }
 

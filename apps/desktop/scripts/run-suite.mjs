@@ -2,7 +2,7 @@
 //
 //   node scripts/run-suite.mjs smoke [--no-build]
 //   node scripts/run-suite.mjs perf [--label <name>] [--baseline <file|label>] [--no-build]
-//   node scripts/run-suite.mjs ui   [--no-build]
+//   node scripts/run-suite.mjs ui   [--no-build] [--single]   (--single: without the forced-WebM second run)
 //   node scripts/run-suite.mjs docs [--no-build]
 //
 // Common options:
@@ -50,6 +50,8 @@ const shotsOut = join(repo, 'docs', 'screenshots');
 if (suite === 'docs' && !process.env.ZEYVOLA_DIST) process.env.ZEYVOLA_DIST = 'mp4';
 // Paths are printed relative to the repository, so no output shows the user's home folder.
 const shown = (p) => relative(repo, p) || '.';
+// Route 3 stands in for MP4 only where MP4 is exported (the A and B builds; not the VP8 build).
+const PROFILE_HAS_MP4 = () => (process.env.ZEYVOLA_DIST ?? 'mp4') !== 'webm-vp8';
 
 // perf: the comparison file is read before anything runs, so a wrong name fails at once.
 const label = suite === 'perf' ? (after('--label') ?? new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)).replace(/[^\w.-]+/g, '-') : null;
@@ -103,24 +105,30 @@ const shotsDir = join(work, 'shots');
 const logFile = join(work, 'app.log');
 const mediaCheck = join(repo, 'tests', 'media-check', 'av-check.mjs');
 // Chromium's own log goes to stderr (on Windows it would otherwise go to a file next to the app).
-const suiteArgs = [SUITES[suite].flag, '--smoke-report', reportFile, '--enable-logging=stderr'];
-const [cmd, cmdArgs] = packaged ? [packaged, suiteArgs] : [require('electron'), [appDir, ...suiteArgs]];
-const child = spawn(cmd, cmdArgs, {
-  cwd: packaged ? dirname(packaged) : appDir,
-  env: { ...process.env, ZEYVOLA_SHOTS_DIR: shotsDir, ZEYVOLA_MEDIA_CHECK: mediaCheck },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-let log = '';
-child.stdout.on('data', (d) => { log += d; }); // the report itself is read from the file
-child.stderr.on('data', (d) => { log += d; });
-let timedOut = false;
-const killer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMin * 60_000);
+async function runApp(file, extraEnv = {}) {
+  const suiteArgs = [SUITES[suite].flag, '--smoke-report', file, '--enable-logging=stderr'];
+  const [cmd, cmdArgs] = packaged ? [packaged, suiteArgs] : [require('electron'), [appDir, ...suiteArgs]];
+  const child = spawn(cmd, cmdArgs, {
+    cwd: packaged ? dirname(packaged) : appDir,
+    env: { ...process.env, ZEYVOLA_SHOTS_DIR: shotsDir, ZEYVOLA_MEDIA_CHECK: mediaCheck, ...extraEnv },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let out = '';
+  child.stdout.on('data', (d) => { out += d; }); // the report itself is read from the file
+  child.stderr.on('data', (d) => { out += d; });
+  let stopped = false;
+  const killer = setTimeout(() => { stopped = true; child.kill(); }, timeoutMin * 60_000);
+  const exit = await new Promise((res) => child.on('exit', (c) => res(c ?? 1)));
+  clearTimeout(killer);
+  return { code: exit, log: out, timedOut: stopped };
+}
 const t0 = Date.now();
-const code = await new Promise((res) => child.on('exit', (c) => res(c ?? 1)));
-clearTimeout(killer);
+const first = await runApp(reportFile);
+const { code, timedOut } = first;
+let log = first.log;
 writeFileSync(logFile, log);
 // OpenH264 prints "[OpenH264] this = 0x…" lines when it is started; Zeyvola never asks for it.
-const openH264Lines = log.split('\n').filter((l) => l.includes('[OpenH264]')).length;
+let openH264Lines = log.split('\n').filter((l) => l.includes('[OpenH264]')).length;
 const errors = log;
 /** Copies what this run produced to --out (report, log, screenshots) for CI artifacts. */
 function keep(extra = {}) {
@@ -139,6 +147,22 @@ if (!existsSync(reportFile)) {
   process.exit(1);
 }
 const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+
+// ui: a second, short run of the export steps with route 3 forced (ZEYVOLA_TEST_EXPORT_ROUTE=webm,
+// test runs only): WebM instead of MP4, said before and after the export. Every system can run it.
+// --single skips it (CI runs that pass their own route settings).
+if (suite === 'ui' && !args.includes('--single') && !process.env.ZEYVOLA_UITEST_ONLY && PROFILE_HAS_MP4()) {
+  const second = join(work, 'report-webm.json');
+  const r = await runApp(second, { ZEYVOLA_UITEST_ONLY: 'export', ZEYVOLA_TEST_EXPORT_ROUTE: 'webm', ZEYVOLA_TEST_EXPECT_ROUTE: 'webm-fallback' });
+  log += `\n--- WebM'e düşüş (zorlanmış) ---\n${r.log}`;
+  writeFileSync(logFile, log);
+  openH264Lines += r.log.split('\n').filter((l) => l.includes('[OpenH264]')).length;
+  const extra = existsSync(second) ? JSON.parse(readFileSync(second, 'utf8')) : { ok: false, checks: [{ name: 'rapor yazılmadı', ok: false, detail: `çıkış kodu ${r.code}` }] };
+  report.checks = [...(report.checks ?? []), ...(extra.checks ?? []).map((c) => ({ ...c, name: `WebM'e düşüş (zorlanmış): ${c.name}` }))];
+  report.ok = report.ok && extra.ok;
+  report.fallbackPass = { ok: extra.ok, exportFacts: extra.exportFacts ?? null, mp4Unavailable: extra.mp4Unavailable ?? null };
+  writeFileSync(reportFile, `${JSON.stringify(report, null, 1)}\n`);
+}
 
 const pad = (s, n) => String(s) + ' '.repeat(Math.max(0, n - [...String(s)].length));
 const padL = (s, n) => ' '.repeat(Math.max(0, n - [...String(s)].length)) + String(s);

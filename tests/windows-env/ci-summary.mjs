@@ -39,11 +39,31 @@ for (const f of files.filter((x) => x.endsWith('terms-flow.json'))) {
   const t = read(f);
   if (!t) continue;
   say(`## ${relative(out, f)}`);
-  say(`DLL pakette ${t.dllInPackage}, System32'de ${t.systemHasD3dcompiler47}, koşul metni ${t.termsFileInPackage}`);
+  say(`DLL pakette ${JSON.stringify(t.dllInPackage)}, System32'de ${t.systemHasD3dcompiler47}, koşul metni ${t.termsFileInPackage}`);
   for (const s of [].concat(t.scenarios ?? [])) say(`${s.ok ? '✓' : '✗'} ${s.scenario}: ${JSON.stringify(s)}`);
   say();
 }
 for (const f of files.filter((x) => /platform-packages-.*\.json$/.test(x))) say(`## ${relative(out, f)} (docs/licenses/platform-packages.json için)\n${readFileSync(f, 'utf8')}\n`);
+for (const f of files.filter((x) => /dll-watch-.*\.json$|removed-dll\.json$/.test(x))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
+// The package with and without its d3dcompiler_47.dll: which smoke checks differ.
+{
+  const a = files.find((x) => /packaged[\\/]smoke-report\.json$/.test(x));
+  const b = files.find((x) => /packaged-nodll[\\/]smoke-report\.json$/.test(x));
+  const ra = a && read(a);
+  const rb = b && read(b);
+  if (ra && rb) {
+    const ok = (r) => new Map((r.checks ?? []).map((c) => [c.name, c.ok]));
+    const ma = ok(ra);
+    const mb = ok(rb);
+    const names = [...new Set([...ma.keys(), ...mb.keys()])];
+    const diff = names.filter((n) => ma.get(n) !== mb.get(n));
+    say(`## DLL'li ve DLL'siz paket: ${[...ma.values()].filter(Boolean).length}/${ma.size} ve ${[...mb.values()].filter(Boolean).length}/${mb.size} denetim geçti`);
+    say(`oluşturucu: "${ra.gpu}" / "${rb.gpu}"`);
+    for (const n of diff) say(`  fark: ${n} — DLL'li ${ma.get(n) ?? 'yok'}, DLL'siz ${mb.get(n) ?? 'yok'}`);
+    if (!diff.length) say('  fark yok');
+    say();
+  }
+}
 for (const f of files.filter((x) => x.endsWith('helper-encode-probe.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 for (const f of files.filter((x) => x.endsWith('uitest-clicks.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 
