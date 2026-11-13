@@ -35,8 +35,8 @@ const after = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i +
 const perfDir = join(appDir, 'out', 'perf');
 const shotsOut = join(repo, 'docs', 'screenshots');
 
-// The README pictures show the published distribution (WebM: VP9 + Opus) unless asked otherwise.
-if (suite === 'docs' && !process.env.ZEYVOLA_DIST) process.env.ZEYVOLA_DIST = 'webm';
+// The README pictures show the published distribution (A, the default build) unless asked otherwise.
+if (suite === 'docs' && !process.env.ZEYVOLA_DIST) process.env.ZEYVOLA_DIST = 'mp4';
 // Paths are printed relative to the repository, so no output shows the user's home folder.
 const shown = (p) => relative(repo, p) || '.';
 

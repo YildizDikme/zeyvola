@@ -1,5 +1,5 @@
 {
-  "$comment": "Codec bileşenleri: açık kaynak (telif) lisansı ile patent durumu ayrı tutulur. Patent durumu hiçbir satırda çözülmüş gösterilmez. 'profiles': satırın geçerli olduğu dağıtımlar (mp4 = A, webm = B yayımlanan, webm-vp8 = deneysel VP8); paket bildirimleri yalnızca kendi profilinin satırlarını içerir. 'chromiumTitle' doluysa Electron'un LICENSES.chromium.html dosyasında bu başlıklı bir giriş bulunması test edilir.",
+  "$comment": "Codec bileşenleri: açık kaynak (telif) lisansı ile patent durumu ayrı tutulur. Patent durumu hiçbir satırda çözülmüş gösterilmez. 'profiles': satırın geçerli olduğu dağıtımlar (mp4 = A yayımlanan, webm = B, webm-vp8 = deneysel VP8); paket bildirimleri yalnızca kendi profilinin satırlarını içerir. 'chromiumTitle' doluysa Electron'un LICENSES.chromium.html dosyasında bu başlıklı bir giriş bulunması test edilir.",
   "rows": [
     {
       "id": "ffmpeg",

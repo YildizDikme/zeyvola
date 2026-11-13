@@ -128,9 +128,9 @@ async function encodeVideo(width: number, height: number, frames: number, draw: 
   const canvas = new OffscreenCanvas(width, height);
   const g = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
   const parts: { d: Uint8Array; p: number | null }[] = [];
-  // Like the recorders: the A build's macOS helper writes H.264 with the OS (hardware) encoder;
-  // the B build has no H.264 at all, so its stand-in is VP9 in MP4; the VP8 build records
-  // VP8 in WebM (Chromium's recorder).
+  // Like the recorders: the macOS helper writes H.264 with the OS (hardware) encoder, so the A and
+  // B builds (both with H.264 through the OS) use H.264 in MP4; the VP8 build, which has no H.264
+  // at all, records VP8 in WebM (Chromium's recorder).
   const vp8 = FIXTURE_MIME === 'video/webm';
   const codec = PATENT_POOL_CODECS ? 'avc1.640028' : vp8 ? 'vp8' : 'vp09.00.41.08';
   const video: Mp4VideoConfig = PATENT_POOL_CODECS ? { codec: 'avc1', width, height } : { codec: 'vp09', width, height, codecString: codec };

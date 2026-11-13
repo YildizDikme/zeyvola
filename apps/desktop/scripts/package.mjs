@@ -3,7 +3,7 @@
 // No packaging dependency: the official Electron zip (SHA-256 checked by @electron/get,
 // tools/electron-artifacts.mjs) is unpacked and our app is put inside it.
 //
-//   node apps/desktop/scripts/package.mjs [--profile webm|mp4|webm-vp8] [--arch arm64|x64] [--skip-build] [--test-signing]
+//   node apps/desktop/scripts/package.mjs [--profile mp4|webm|webm-vp8] [--arch arm64|x64] [--skip-build] [--test-signing]
 //
 // --test-signing (macOS, local tests only): the ad hoc signature names a fixed requirement (the bundle
 // identifier) instead of the build's own hash, so macOS keeps the screen recording, camera and
@@ -32,10 +32,11 @@ const { writeDist } = await import(join(root, 'tools', 'third-party-notices.mjs'
 const { setVersionInfo } = await import(join(root, 'tools', 'win-version-info.mjs'));
 
 const arg = (name, fallback) => { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; };
-// The released distribution is B: Chromium recording (WebM); export as MP4 (H.264 + AAC through the
-// operating system's encoders, since 2026-11-13) or WebM (VP9 + Opus). Its bundle identifier stays
-// com.zeyvola.app: users' macOS permissions and settings belong to it.
-const profile = arg('profile', 'webm');
+// The released distribution is A (since 2026-11-13, docs/denetim/2026-11-13-mp4-h264-karari.md):
+// MP4 (H.264 + AAC) and WebM (VP9 + Opus) export, and the macOS recorder (ScreenCaptureKit; it writes
+// H.264 with VideoToolbox). The released profile carries the plain identifier com.zeyvola.app, which
+// users' macOS permissions belong to; the other profiles get a suffix (bundleIdFor).
+const profile = arg('profile', 'mp4');
 const platform = arg('platform', 'darwin');
 const arch = arg('arch', process.arch);
 if (!['mp4', 'webm', 'webm-vp8'].includes(profile)) throw new Error('--profile mp4 | webm | webm-vp8');
@@ -123,17 +124,17 @@ if (platform === 'darwin') {
   set('NSHumanReadableCopyright', 'string', COPYRIGHT);
   set('NSCameraUsageDescription', 'string', 'Zeyvola, kamera görüntünüzü ekrandan ayrı kaydetmek için kameraya erişir.');
   set('NSMicrophoneUsageDescription', 'string', 'Zeyvola, sesinizi kaydetmek için mikrofona erişir.');
-  // System audio is recorded only by the macOS recorder of the MP4 profile; the published profile does not ask for it.
+  // System audio is recorded only by the macOS recorder, which ships in the A profile alone.
   if (profile === 'mp4') set('NSAudioCaptureUsageDescription', 'string', 'Zeyvola, bilgisayarın sesini ekran kaydına eklemek için sistem sesine erişir.');
   else { try { execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Delete :NSAudioCaptureUsageDescription', plist], { stdio: 'ignore' }); } catch { /* absent */ } }
   set('NSCameraUseContinuityCameraDeviceType', 'bool', 'true');
-  // The macOS recorder (H.264 with VideoToolbox) ships only in A: B's recording path stays Chromium's;
-  // B's H.264 is the MP4 export alone.
+  // The macOS recorder (H.264 with VideoToolbox) ships only in A; B and VP8 record through Chromium.
+  // It is a universal binary (arm64 + x86_64, native/recorder-macos/build.sh), so one build serves
+  // both package architectures; the check below refuses a binary without this package's.
   if (profile === 'mp4') {
-    const helper = join(root, 'native', 'recorder-macos', 'bin', 'zeyvola-recorder');
-    if (!existsSync(helper)) throw new Error('Kayıt yardımcısı derlenmemiş: pnpm native:mac');
-    mkdirSync(join(resources, 'bin'), { recursive: true });
-    cpSync(helper, join(resources, 'bin', 'zeyvola-recorder'));
+    shipHelper('recorder-macos', 'zeyvola-recorder');
+    const archs = execFileSync('lipo', ['-archs', join(resources, 'bin', 'zeyvola-recorder')], { encoding: 'utf8' }).trim().split(/\s+/);
+    if (!archs.includes(arch === 'x64' ? 'x86_64' : arch)) throw new Error(`Kayıt yardımcısında ${arch} yok (${archs.join(', ')}): native/recorder-macos/build.sh`);
   }
   // The pointer helper (mouse buttons and scrolling only; AppKit, no codecs) ships in every
   // macOS profile: the Chromium recording path cannot see clicks on its own.
@@ -209,7 +210,9 @@ sh('node', [join(root, 'tools', 'codec-audit.mjs'), out, '--profile', profile, '
 console.log(`Paket: ${out}`);
 
 function bundleIdFor(p) {
-  return { webm: 'com.zeyvola.app', mp4: 'com.zeyvola.app.mp4', 'webm-vp8': 'com.zeyvola.app.vp8' }[p];
+  // The released profile (A) is com.zeyvola.app; until 2026-11-13 that identifier was B's, so a
+  // released A replaces an installed B in place and keeps its settings and permissions entry.
+  return { mp4: 'com.zeyvola.app', webm: 'com.zeyvola.app.webm', 'webm-vp8': 'com.zeyvola.app.vp8' }[p];
 }
 
 function ffmpegNotice() {

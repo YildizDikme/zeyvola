@@ -28,7 +28,7 @@ describe('distribution profiles', () => {
     }
   });
 
-  it('the published B profile keeps the Chromium recording path: no macOS recorder', () => {
+  it('A (published) ships the macOS recorder; B is A without it, with the same exports', () => {
     expect(WEBM_PROFILE.nativeRecorder).toBe(false);
     expect(MP4_PROFILE.nativeRecorder).toBe(true);
     expect(WEBM_PROFILE.exports).toEqual(MP4_PROFILE.exports);

@@ -1,16 +1,16 @@
 # Zeyvola
 
-macOS için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera ve mikrofon ayrı izlere kaydedilir. Kayıttan sonra zaman çizelgesinde zoom, kamera yerleşimi, gizleme ve tema düzenlenir.
+macOS için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera, mikrofon ve sistem sesi ayrı izlere kaydedilir. Kayıttan sonra zaman çizelgesinde zoom, kamera yerleşimi, gizleme ve tema düzenlenir.
 
-*Screen recording and video editing for macOS. Screen, camera and microphone are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
+*Screen recording and video editing for macOS. Screen, camera, microphone and system audio are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
 
 > Sürüm 0.1, ilk genel sürüm. Şimdilik yalnızca **macOS (Apple Silicon)**. Windows sürümü hazırlanıyor; gerçek Windows'ta test edilene kadar yayımlanmayacak.
 >
-> Bu sürümde bilinen sınırlar: **sistem sesi kaydedilmez** (mikrofon kaydedilir) ve imleç videoya gömülü kaydedilir.
-> *Known limits in this version: system audio is not recorded (the microphone is) and the cursor is part of the video.*
+> Kayıt, macOS kayıt yardımcısıyla (ScreenCaptureKit) yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür.
+> *Recording uses the macOS recording helper (ScreenCaptureKit): system audio goes to its own track and the cursor is kept out of the video. With the "Fallback" (browser) method on the recording screen, system audio is not recorded and the cursor is part of the video.*
 
 ## Özellikler / Features
-- Ekran, kamera ve mikrofon kaydı (ayrı izler)
+- Ekran, kamera, mikrofon ve sistem sesi kaydı (ayrı izler)
 - Tıklamalardan ve imleç hareketinden otomatik zoom önerileri; elle düzenlenebilir. Tıklamaları küçük bir yardımcı program (`native/input-macos`) bildirir; yalnızca fare tuşlarını ve kaydırmayı görür, klavyeyi okumaz, video ya da ses kaydetmez.
 - Zaman çizelgesi: kesme, bölme, video ekleme (MP4, MOV, WebM)
 - Gizleme: seçilen alanı buzlu cam, bulanıklık ya da piksel efektiyle kapatma. Dışa aktarılan her kare bu efektlerden geçer.
@@ -101,13 +101,13 @@ pnpm install
 pnpm --filter @zeyvola/desktop exec node node_modules/electron/install.js   # Electron ikili dosyası
 pnpm dev                      # geliştirme: derle ve uygulamayı aç (pnpm build && pnpm start)
 pnpm test && pnpm typecheck   # birim testleri ve tip denetimi
-pnpm package                  # macOS paketi → apps/desktop/out/webm/darwin-<arch>/
-pnpm codec-audit -- apps/desktop/out/webm/darwin-arm64 --profile webm --probe --release
+pnpm package                  # macOS paketi → apps/desktop/out/mp4/darwin-<arch>/
+pnpm codec-audit -- apps/desktop/out/mp4/darwin-arm64 --profile mp4 --probe --release
 ```
 
-`pnpm package` varsayılan olarak yayımlanan yapılandırmayı (`ZEYVOLA_DIST=webm`: Chromium kayıt yolu; dışa aktarma MP4 H.264 + AAC ve WebM VP9 + Opus) derler. Paketler yerel test için geçici imzalanır.
+`pnpm package` varsayılan olarak yayımlanan yapılandırmayı (`ZEYVOLA_DIST=mp4`: macOS kayıt yardımcısı; dışa aktarma MP4 H.264 + AAC ve WebM VP9 + Opus) derler. Kayıt yardımcısı `native/recorder-macos/build.sh` ile evrensel ikili (arm64 + x86_64) olarak derlenir. `--profile webm` kayıt yardımcısı olmayan, yalnızca tarayıcı yoluyla kaydeden yapılandırmadır. Paketler yerel test için geçici imzalanır.
 
-*`pnpm package` builds the published configuration by default (`ZEYVOLA_DIST=webm`: Chromium recording; MP4 export as H.264 + AAC, WebM as VP9 + Opus). Packages are ad-hoc signed for local testing.*
+*`pnpm package` builds the published configuration by default (`ZEYVOLA_DIST=mp4`: the macOS recording helper; MP4 export as H.264 + AAC, WebM as VP9 + Opus). The helper is built as a universal binary (arm64 + x86_64) by `native/recorder-macos/build.sh`. `--profile webm` is the configuration without the helper, recording through the browser only. Packages are ad-hoc signed for local testing.*
 
 Uygulama içi test takımları / In-app test suites (geçici bir proje klasörü, sentetik kamera ve mikrofonla çalışır; kendi projeleriniz okunmaz. Ekran ve GPU gerektirir):
 - `pnpm smoke`: uygulamayı derler ve arayüz katmanını kendi kendine dener (WebGL2 kompozitör, gizleme efektleri, WebCodecs kodlayıcıları, MP4/WebM yazıcıları); bu Mac için bir yetenek tablosu raporlar.
@@ -134,7 +134,7 @@ Diğer notlar / Other notes:
 - `packages/media-web`: MP4 ve WebM yazıcıları
 - `packages/protocol`: IPC sözleşmesi ve doğrulama
 - `native/input-macos`: tıklama yardımcısı (fare tuşları ve kaydırma; codec içermez)
-- `native/recorder-macos`: isteğe bağlı macOS kayıt yardımcısı (yayımlanan sürümde yer almaz)
+- `native/recorder-macos`: macOS kayıt yardımcısı (ScreenCaptureKit; ekranı ve kamerayı macOS'un kodlayıcısıyla H.264 yazar, sesi Opus). Yayımlanan sürümde vardır.
 - `tools/`: lisans bildirimleri, codec denetimi, FFmpeg kaynak paketi
 
 ## Katkı / Contributing

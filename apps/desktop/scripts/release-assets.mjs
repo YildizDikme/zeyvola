@@ -28,13 +28,15 @@ const arch = arg('arch', platform === 'win32' ? 'x64' : process.arch);
 const windows = platform === 'win32';
 const draft = process.argv.includes('--draft') || windows;
 const { version, author, homepage } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
-const pkgDir = join(appDir, 'out', 'webm', `${platform}-${arch}`);
+// The released profile is A (package.mjs default since 2026-11-13).
+const PROFILE = 'mp4';
+const pkgDir = join(appDir, 'out', PROFILE, `${platform}-${arch}`);
 const app = join(pkgDir, windows ? 'Zeyvola.exe' : 'Zeyvola.app');
 if (!existsSync(app)) { console.error(`Önce paket: node apps/desktop/scripts/package.mjs --platform ${platform} --arch ${arch}${windows ? ' --experimental-windows' : ''}`); process.exit(1); }
 
 // 1) Audit the exact package that will be zipped.
 const auditJson = join(pkgDir, 'codec-audit-release.json');
-const audit = spawnSync(process.execPath, [join(root, 'tools', 'codec-audit.mjs'), pkgDir, '--profile', 'webm', '--probe', '--release', '--json', auditJson], { encoding: 'utf8' });
+const audit = spawnSync(process.execPath, [join(root, 'tools', 'codec-audit.mjs'), pkgDir, '--profile', PROFILE, '--probe', '--release', '--json', auditJson], { encoding: 'utf8' });
 process.stdout.write(audit.stdout);
 const report = JSON.parse(readFileSync(auditJson, 'utf8'));
 const onlyBlockers = report.fails.every((f) => f.startsWith('yayın engeli:'));

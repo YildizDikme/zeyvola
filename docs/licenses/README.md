@@ -67,7 +67,7 @@ Yeni bir Electron sürümünde tarama yeniden çalıştırılır; yeni bir ikili
 
 ## Henüz çözülmeyenler
 - Zeyvola'nın kendi lisansı seçilmedi; LICENSE dosyası yok. Öneri: `../lisans/zeyvola-lisans-onerisi.md`.
-- Codec patentleri (H.264, AAC, OpenH264) için hukuki görüş gerekiyor; bkz. `../denetim/2026-10-17-dagitim-hazirligi.md` bölüm 6–9. 2026-11-13: kullanıcı, yayımlanan B dağıtımında MP4'ün H.264 + AAC (işletim sisteminin kodlayıcısıyla) olmasını bu riski bilerek seçti; `../denetim/2026-11-13-mp4-h264-karari.md`.
+- Codec patentleri (H.264, AAC, OpenH264) için hukuki görüş gerekiyor; bkz. `../denetim/2026-10-17-dagitim-hazirligi.md` bölüm 6–9. 2026-11-13: kullanıcı MP4'ün H.264 + AAC (işletim sisteminin kodlayıcısıyla) olmasını ve yayımlanan dağıtımın A (`ZEYVOLA_DIST=mp4`, macOS kayıt yardımcısıyla) olmasını, hukuki görüş olmadan, riski üstlenerek seçti; `../denetim/2026-11-13-mp4-h264-karari.md`.
 - Windows SDK'nın dağıtılabilir kod koşulları (d3dcompiler_47.dll) resmi metinden doğrulanmadı.
 
 ## Yerel macOS kayıt yardımcısı (2026-10-17)

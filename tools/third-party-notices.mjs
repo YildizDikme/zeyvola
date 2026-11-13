@@ -153,7 +153,7 @@ export function collect(root = ROOT, { electronDist = null, profile = null, plat
   return { own: ownLicense(root), packages: shippedPackages(root), electron, codecs, profile, platform, supplements: supplementNotices(root, platform) };
 }
 
-const PROFILE_NAME = { mp4: 'A (MP4 + macOS kayıt yardımcısı)', webm: 'B (yayımlanan: WebM + MP4 H.264/AAC)', 'webm-vp8': 'VP8 (WebM, deneysel)' };
+const PROFILE_NAME = { mp4: 'A (yayımlanan: MP4 + WebM, macOS kayıt yardımcısı)', webm: 'B (MP4 + WebM, Chromium kaydı)', 'webm-vp8': 'VP8 (WebM, deneysel)' };
 
 const STATUS_TR = { 'legal-review': 'Hukuki inceleme gerekli', 'low-risk-unverified': 'Düşük risk — hukuken doğrulanmadı' };
 

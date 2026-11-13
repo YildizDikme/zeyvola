@@ -1,14 +1,15 @@
 /**
  * Distribution profiles. One build ships one profile, fixed at build time:
  *
- *   ZEYVOLA_DIST=webm  B · the published build. Records through Chromium (WebM, VP9 + Opus);
- *                    exports WebM (VP9 + Opus) and MP4 (H.264 + AAC). H.264 and AAC come only from
- *                    the operating system's own encoders (macOS VideoToolbox / AudioToolbox, Windows
- *                    Media Foundation); the software H.264 encoder bundled in Electron is never asked
- *                    for. No macOS recorder. (Until 2026-11-13 B's "MP4" held VP9 + Opus, which
- *                    QuickTime and Windows' own player open as sound only; docs/denetim/2026-11-13-mp4-h264-karari.md.)
- *   ZEYVOLA_DIST=mp4   (default for development) A · B's exports plus the macOS recorder (it writes
- *                    H.264 with VideoToolbox).
+ *   ZEYVOLA_DIST=mp4   (default) A · the published build since 2026-11-13. Exports MP4 (H.264 + AAC)
+ *                    and WebM (VP9 + Opus); records with the macOS recorder (ScreenCaptureKit, H.264
+ *                    through VideoToolbox) when it is present, otherwise through Chromium (WebM).
+ *                    H.264 and AAC come only from the operating system's own encoders (macOS
+ *                    VideoToolbox / AudioToolbox, Windows Media Foundation); the software H.264
+ *                    encoder bundled in Electron is never asked for. docs/denetim/2026-11-13-mp4-h264-karari.md.
+ *   ZEYVOLA_DIST=webm  B · A's exports without the macOS recorder: records through Chromium only.
+ *                    (Published until 2026-11-13; its "MP4" then held VP9 + Opus, which QuickTime
+ *                    and Windows' own player open as sound only.)
  *   ZEYVOLA_DIST=webm-vp8  Experimental · records and exports VP8 + Opus in WebM only. No H.264,
  *                    AAC or HEVC in our code at all. Measured with tools/codec-bench.
  *
@@ -73,7 +74,7 @@ const RECORDER_AUDIO = ['audio/webm;codecs=opus', 'audio/webm'] as const;
  */
 const H264_AAC_MP4: ExportPlan = { container: 'mp4', video: [{ codec: 'avc1', accel: ['prefer-hardware'], bitrateScale: 1 }], audio: ['mp4a.40.2'] };
 
-/** A · B's exports plus the macOS recorder. */
+/** A · the published build: MP4 (H.264 + AAC) and WebM export, plus the macOS recorder. */
 export const MP4_PROFILE: DistributionProfile = {
   id: 'mp4',
   patentPoolCodecs: true,
@@ -85,7 +86,7 @@ export const MP4_PROFILE: DistributionProfile = {
   nativeRecorder: true,
 };
 
-/** B · the published build: Chromium recording, WebM (VP9 + Opus) and MP4 (H.264 + AAC) export. */
+/** B · A without the macOS recorder: Chromium recording, WebM (VP9 + Opus) and MP4 (H.264 + AAC) export. */
 export const WEBM_PROFILE: DistributionProfile = {
   id: 'webm',
   patentPoolCodecs: true,

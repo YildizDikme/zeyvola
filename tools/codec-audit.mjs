@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = join(ROOT, 'tools', '.cache');
 
-const PROFILE_LABEL = { mp4: 'A (MP4 + macOS kayıt yardımcısı)', webm: 'B (yayımlanan: Chromium kaydı, WebM + MP4 H.264/AAC)', 'webm-vp8': 'VP8 (WebM, deneysel)' };
+const PROFILE_LABEL = { mp4: 'A (yayımlanan: MP4 H.264/AAC + WebM, macOS kayıt yardımcısı)', webm: 'B (Chromium kaydı, MP4 H.264/AAC + WebM)', 'webm-vp8': 'VP8 (WebM, deneysel)' };
 /** Profiles with no patent-pool codec in our code at all (shared/distribution.ts PATENT_POOL_CODECS). */
 const PATENT_FREE = new Set(['webm-vp8']);
 
