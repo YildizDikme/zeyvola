@@ -7,6 +7,7 @@
 //   node tests/windows-env/ci-summary.mjs <out>
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { imageLines } from './log-images.mjs';
 
 const out = process.argv[2];
 if (!out || !existsSync(out)) { console.log(`ci-summary: klasör yok (${out})`); process.exit(0); }
@@ -29,7 +30,13 @@ for (const f of files.filter((x) => x.endsWith('-report.json'))) {
   if (r.mp4Unavailable) say(`MP4 yazılamıyor (arayüz): ${r.mp4Unavailable}`);
   for (const c of checks) say(`${c.ok ? '✓' : c.known ? '⚠ BİLİNEN SORUN' : '✗'} ${c.name}${c.detail ? ` — ${String(c.detail).slice(0, 600)}` : ''}${!c.ok && c.known ? ` [${c.known}]` : ''}`);
   if (r.capabilities) { say('Yetenekler:'); for (const [k, v] of Object.entries(r.capabilities)) say(`  ${k}: ${v}`); }
-  if (r.realCapture) say(`Gerçek kayıt: ${JSON.stringify(r.realCapture)}`);
+  if (r.realCapture) {
+    const { images, shape, ...rest } = r.realCapture;
+    const { scales, ...shapeRest } = shape ?? {};
+    say(`Gerçek kayıt: ${JSON.stringify({ ...rest, shape: shape ? shapeRest : null })}`);
+    if (scales) say(`Kare ölçümünün ölçekleri: ${JSON.stringify(scales)}`);
+    for (const im of images ?? []) say(`Resim ${im.name}: ${im.note}${im.error ? ` — YOK: ${im.error}` : im.jpeg ? ` (${Math.round((im.jpeg.length * 3) / 4 / 1024)} KB)` : ''}`);
+  }
   for (const c of r.captureShape ?? []) say(`Kayıt penceresinin biçim raporu: ${JSON.stringify(c)}`);
   if (r.exportFacts) say(`Dışa aktarma ölçüleri: ${JSON.stringify(r.exportFacts)}`);
   if (r.mp4Route || r.webCodecsH264 !== undefined) say(`MP4 yolu: ${r.mp4Route ?? '?'}, WebCodecs donanım H.264: ${r.webCodecsH264}`);
@@ -75,3 +82,18 @@ for (const f of files.filter((x) => x.endsWith('uitest-clicks.json'))) say(`## $
 const text = lines.join('\n');
 console.log(text || 'ci-summary: rapor bulunamadı');
 if (process.env.GITHUB_STEP_SUMMARY && text) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
+
+// The real recording's pictures, from one run (the packaged one, else the development one), into the
+// log only (not the job summary): node tests/windows-env/log-images.mjs gets them back.
+{
+  const reports = files.filter((x) => /[\\/]ui-report\.json$/.test(x));
+  const pick = reports.find((x) => /packaged[\\/]ui-report\.json$/.test(x)) ?? reports.find((x) => read(x)?.realCapture?.images?.length);
+  const images = (pick && read(pick)?.realCapture?.images) ?? [];
+  if (images.length) {
+    console.log(`\n## Resimler (${relative(out, pick)}): node tests/windows-env/log-images.mjs <günlük> <klasör>`);
+    for (const im of images) {
+      if (!im.jpeg) { console.log(`resim ${im.name} yok: ${im.error ?? '?'}`); continue; }
+      try { for (const l of imageLines(im.name, im.jpeg)) console.log(l); } catch (e) { console.log(`resim ${im.name} yazılamadı: ${e.message}`); }
+    }
+  }
+}

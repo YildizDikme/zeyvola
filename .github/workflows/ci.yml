@@ -1,7 +1,10 @@
 name: CI
 
 # Changes that only concern the Windows test (windows.yml) do not start this macOS job.
+# workflow_dispatch: run it by hand when a push did not start it (e.g. a force push of rewritten
+# history; the paths filter is not evaluated for manual runs). gh workflow run ci.yml --ref main
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths-ignore:

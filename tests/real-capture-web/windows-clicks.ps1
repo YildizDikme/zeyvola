@@ -65,6 +65,36 @@ function ScreenColor {
   } catch { return "okunamadi: $($_.Exception.Message)" }
 }
 $screenColor = ScreenColor
+# The whole screen as the driver sees it (with the square), small: a 320 px wide JPEG (quality 60)
+# in screen-shot.json, so the CI log can show it next to the recorded frame (uitest.ts). A failure
+# here only leaves a note in the file.
+function ScreenShot {
+  try {
+    $full = New-Object System.Drawing.Bitmap($w, $h)
+    $g = [System.Drawing.Graphics]::FromImage($full)
+    $g.CopyFromScreen(0, 0, 0, 0, $full.Size)
+    $g.Dispose()
+    $sw = 320; $sh = [int]($h * 320 / $w)
+    $small = New-Object System.Drawing.Bitmap($sw, $sh)
+    $g = [System.Drawing.Graphics]::FromImage($small)
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBilinear
+    $g.DrawImage($full, 0, 0, $sw, $sh)
+    $g.Dispose(); $full.Dispose()
+    $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+    $ep = New-Object System.Drawing.Imaging.EncoderParameters(1)
+    $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]60)
+    $ms = New-Object System.IO.MemoryStream
+    $small.Save($ms, $codec, $ep)
+    $small.Dispose()
+    $b64 = [Convert]::ToBase64String($ms.ToArray())
+    $ms.Dispose()
+    $json = [ordered]@{ width = $sw; height = $sh; screenWidth = $w; screenHeight = $h; at = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); jpeg = $b64 } | ConvertTo-Json -Compress
+  } catch {
+    $json = [ordered]@{ error = "$($_.Exception.Message)" } | ConvertTo-Json -Compress
+  }
+  [System.IO.File]::WriteAllText((Join-Path $SignalDir 'screen-shot.json'), $json, (New-Object System.Text.UTF8Encoding($false)))
+}
+ScreenShot
 $formVisible = $form.Visible
 # left down/up 0x2/0x4, right down/up 0x8/0x10
 $plan = @(
