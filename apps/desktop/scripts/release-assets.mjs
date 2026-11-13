@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, '..');
@@ -31,7 +31,7 @@ const arch = arg('arch', platform === 'win32' ? 'x64' : process.arch);
 const windows = platform === 'win32';
 const draft = process.argv.includes('--draft') || windows;
 const { version, author, homepage } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
-const { createZip } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
+const { createZip } = await import(pathToFileURL(join(root, 'tools', 'electron-artifacts.mjs')).href);
 // The released profile is A (package.mjs default since 2026-11-13).
 const PROFILE = 'mp4';
 const pkgDir = join(appDir, 'out', PROFILE, `${platform}-${arch}`);

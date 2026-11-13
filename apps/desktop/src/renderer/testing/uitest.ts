@@ -312,6 +312,16 @@ export async function runUiTest(): Promise<unknown> {
       realCapture = await recordScreen(shots);
       return realCapture.summary;
     });
+    const rc = realCapture as RealCapture | null;
+    if (rc?.screen && rc.display) {
+      // A display recording must keep the display's shape (zoom targets and clicks are fractions of it).
+      const { screen, display } = rc;
+      checks.push({
+        name: 'Gerçek ekran kaydı: video ekranın en-boy oranında (kırpılmış ya da sıkıştırılmış değil)',
+        ok: Math.abs(screen.width / screen.height - display.w / display.h) < 0.02,
+        detail: `ekran ${display.w}×${display.h} (ölçek ${display.scale}), kaynak kaydı ${rc.source?.width}×${rc.source?.height}, video ${screen.width}×${screen.height}`,
+      });
+    }
   }
 
   return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST, ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
@@ -385,6 +395,9 @@ interface RealCapture {
   clicksCapability: boolean;
   seconds: number;
   screen: { width: number; height: number; duration: number; frames: number; spread: number; black: boolean } | null;
+  /** What the recording says about its screen video, and the display it recorded. */
+  source: { width?: number; height?: number; fps?: number; seconds: number } | null;
+  display: { w: number; h: number; scale: number } | null;
   mic: { duration: number; peak: number } | null;
   cursor: { moves: number; downs: number; buttons: string };
   driver: { clicks: number; matched: number; worstOffset: number } | null;
@@ -429,7 +442,10 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     const kept = await invoke<string>('smoke:realRecording', { op: 'keep', projectId: project.id, path: src.file, as: `gercek-kayit-ekran.${src.file.split('.').pop()}` });
     shots.push(kept);
     const v = await probeVideo(url(src.file), 2.5);
-    screen = { width: v.width, height: v.height, duration: v.duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01) };
+    // MediaRecorder's WebM has no duration in its header: Chromium reports Infinity until it has
+    // looked at the end of the file.
+    const duration = Number.isFinite(v.duration) ? v.duration : await durationBySeeking(url(src.file));
+    screen = { width: v.width, height: v.height, duration, frames: await countFrames(url(src.file)), spread: v.spread, black: !(v.spread > 0.01) };
   }
   let micInfo: RealCapture['mic'] = null;
   if (rec!.sources.mic) {
@@ -459,11 +475,17 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   const summary = [
     `arka uç ${rec!.capture.backend}, tıklama yardımcısı ${web?.capabilities.clicks ? 'var' : 'yok'}`,
     screen ? `ekran ${screen.width}×${screen.height}, ${screen.duration.toFixed(2)} sn, ${screen.frames} kare, yayılım ${screen.spread.toFixed(3)}${screen.black ? ' (SİYAH/BOŞ)' : ''}` : 'ekran dosyası yok',
+    `kaynak kaydı ${src?.width}×${src?.height} @${src?.fps} fps, ekran ${display!.bounds?.w}×${display!.bounds?.h} ölçek ${display!.scaleFactor ?? 1}`,
     micInfo ? `mikrofon ${micInfo.duration.toFixed(2)} sn, tepe ${micInfo.peak.toFixed(3)}` : 'mikrofon yok',
     `imleç ${cursor.moves} konum, ${cursor.downs} tıklama (${cursor.buttons || '-'})`,
     driver ? `sürücü ${driver.clicks} tıklama, ${driver.matched} eşleşti (en büyük sapma ${driver.worstOffset})` : 'tıklama sürücüsü günlüğü yok',
   ].join(' · ');
-  const out: RealCapture = { summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, mic: micInfo, cursor, driver };
+  const source = src ? { width: src.width, height: src.height, fps: src.fps, seconds: src.duration / TICKS_PER_SECOND } : null;
+  const b = display!.bounds;
+  const out: RealCapture = {
+    summary, backend: rec!.capture.backend, clicksCapability: !!web?.capabilities.clicks, seconds, screen, source,
+    display: b ? { w: b.w, h: b.h, scale: display!.scaleFactor ?? 1 } : null, mic: micInfo, cursor, driver,
+  };
   expect(screen, `ekran dosyası yok · ${summary}`);
   expect(Math.abs(screen!.duration - seconds) < 1.5, `ekran videosu ${screen!.duration.toFixed(2)} sn, beklenen ~${seconds} sn · ${summary}`);
   expect(screen!.frames >= seconds * 5, `ekran videosunda ${screen!.frames} kare · ${summary}`);
@@ -471,6 +493,20 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
   expect(cursor.moves > 0, `imleç günlüğü boş · ${summary}`);
   if (driver && web?.capabilities.clicks) expect(driver.matched === driver.clicks, `tıklamalar imleç günlüğünde eksik ya da yanlış yerde · ${summary}`);
   return out;
+}
+
+/** Duration of a video whose header has none: seek far past the end, then read it. */
+async function durationBySeeking(src: string): Promise<number> {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.src = src;
+  await new Promise<void>((res) => { v.onloadedmetadata = () => res(); v.onerror = () => res(); setTimeout(res, 8000); });
+  v.currentTime = 1e7;
+  await new Promise<void>((res) => { v.ondurationchange = () => { if (Number.isFinite(v.duration)) res(); }; v.onseeked = () => res(); setTimeout(res, 8000); });
+  const d = v.duration;
+  v.removeAttribute('src');
+  v.load();
+  return d;
 }
 
 /** `until` for a check that has to ask the main process. */

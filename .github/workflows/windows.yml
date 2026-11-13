@@ -25,13 +25,19 @@ jobs:
       ZEYVOLA_DIST: mp4
       OUT: ${{ github.workspace }}\out-ci
       # Electron's download cache (electron/install.js, tools/electron-artifacts.mjs), outside the checkout.
-      electron_config_cache: ${{ github.workspace }}\..\electron-cache
+      # actions/cache refuses paths with '..'; .cache/ is git-ignored.
+      electron_config_cache: ${{ github.workspace }}\.cache\ci-electron
       # 'false' skips the packaged-app steps (package.mjs on Windows needs zig for zeyvola-win.exe).
       PACKAGED: 'true'
     defaults:
       run:
         shell: pwsh
     steps:
+      # Windows images check text files out with CRLF line ends; the repository's files (and the
+      # tests comparing generated files with them) are LF.
+      - name: git LF
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -75,6 +81,14 @@ jobs:
           ZEYVOLA_ZIG_CACHE: ${{ env.electron_config_cache }}\zig
         run: node tools/zig-fetch.mjs
 
+      # Packaging first: it builds the app and zeyvola-win.exe (pointer helper, Media Foundation audio),
+      # which the development runs below then use too (native/helper-windows/bin).
+      - name: Windows paketi / package
+        id: package
+        if: env.PACKAGED == 'true' && steps.zig.outcome == 'success'
+        continue-on-error: true
+        run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64 --experimental-windows
+
       - name: Tür denetimi / typecheck
         id: typecheck
         continue-on-error: true
@@ -114,14 +128,7 @@ jobs:
         continue-on-error: true
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/node_modules/electron/dist/electron.exe -AppArg "$env:GITHUB_WORKSPACE\apps\desktop" -Out "$env:OUT\dev-terms"
 
-      # ─── Packaged app (Zeyvola.exe), once packaging works on Windows ───
-      - name: Windows paketi / package
-        id: package
-        if: env.PACKAGED == 'true' && steps.zig.outcome == 'success'
-        continue-on-error: true
-        run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64 --experimental-windows --skip-build
-
-      # Saved after packaging, so the Windows Electron/FFmpeg zips are kept too, even when a later step fails.
+            # Saved after packaging, so the Windows Electron/FFmpeg zips are kept too, even when a later step fails.
       - name: Electron önbelleğini kaydet / save Electron cache
         if: always() && steps.electron-cache.outputs.cache-hit != 'true'
         continue-on-error: true
@@ -158,14 +165,21 @@ jobs:
         continue-on-error: true
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/out/mp4/win32-x64/Zeyvola.exe -Out "$env:OUT\packaged-terms"
 
+      # The findings in the log and the job summary, so they survive a failed artifact upload.
+      - name: Özet / summary
+        if: always()
+        continue-on-error: true
+        run: node tests/windows-env/ci-summary.mjs "$env:OUT"
+
       - name: Sonuçları yükle / upload results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: windows-test
           path: out-ci
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
       - name: Sonuç / verdict
         if: always()

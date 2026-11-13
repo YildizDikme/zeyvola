@@ -128,6 +128,7 @@ public static class ZeyvolaMf {
   static string CodecName(Guid sub) {
     if (sub == MFVideoFormat_H264) return "avc1";
     if (sub == MFAudioFormat_AAC) return "aac ";
+    if (sub == new Guid("4f707573-767a-494d-b478-f29d25dc9037")) return "Opus"; // as the WebM/MP4 source reports Opus (seen on Windows Server 2025)
     byte[] b = sub.ToByteArray();
     string tail = sub.ToString().Substring(8);
     if (tail == "-0000-0010-8000-00aa00389b71") {

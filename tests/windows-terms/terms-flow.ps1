@@ -63,6 +63,34 @@ function Buttons($dialog) {
 function Press($button) {
   $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
+# The dialog's buttons, waited for (the window can appear before its contents).
+function WaitButtons($dialog) {
+  $found = WaitFor { $b = Buttons $dialog; if ($b.Count -ge 3) { , $b } } 15
+  if ($found) { return , $found }
+  return , @()
+}
+# What UI Automation sees inside the dialog, for the log when the buttons are not found.
+function DumpTree($dialog) {
+  $all = $dialog.FindAll($TreeScope::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+  @($all | ForEach-Object { "{0}|{1}|{2}|{3}" -f $_.Current.ControlType.ProgrammaticName, $_.Current.ClassName, $_.Current.AutomationId, $_.Current.Name })
+}
+Add-Type -AssemblyName System.Windows.Forms
+# Keyboard fallback, as a person would: the dialog's default button is "Read the terms" (index 1),
+# Escape is its cancel button ("Decline", index 2), Shift+Tab from the default reaches "Accept".
+function PressByKeys($dialog, [string]$which) {
+  try { $dialog.SetFocus() } catch { }
+  Start-Sleep -Milliseconds 300
+  if ($which -eq 'decline') { [System.Windows.Forms.SendKeys]::SendWait('{ESC}') } else { [System.Windows.Forms.SendKeys]::SendWait('+{TAB}'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait(' ') }
+}
+function Answer($r, $dialog, [string]$which) {
+  $btn = WaitButtons $dialog
+  $r.buttons = @($btn | ForEach-Object { $_.Current.Name })
+  if ($btn.Count -ge 3) { Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]; $r.answeredBy = 'UI Automation'; return }
+  $r.tree = DumpTree $dialog
+  $r.notes += "dugme bulunamadi ($($btn.Count)); klavyeyle yanitlandi"
+  PressByKeys $dialog $which
+  $r.answeredBy = 'klavye'
+}
 function Start-App([string]$exePath, [string]$th) {
   $env:ZEYVOLA_TEST_HOME = $th
   $argList = @(); if ($AppArg) { $argList += '"' + $AppArg + '"' }
@@ -100,17 +128,14 @@ Scenario 'decline' {
   $d = WaitFor { Dialog $Exe } 45
   if (-not $d) { $r.notes += 'iletisim kutusu cikmadi'; Shot 'terms-decline-none'; return }
   $r.title = $d.Current.Name
-  $r.buttons = @(Buttons $d | ForEach-Object { $_.Current.Name })
-  $r.windowsBeforeAnswer = @(AppWindows $Exe | ForEach-Object { $_.Current.ClassName })
+  $r.windowsBeforeAnswer = @(AppWindows $Exe | ForEach-Object { "$($_.Current.ClassName)|$($_.Current.Name)" })
   $r.dllLoadedBeforeAnswer = DllLoaded $Exe
   Shot 'terms-dialog'
-  $btn = Buttons $d
-  if ($btn.Count -lt 3) { $r.notes += "dugme sayisi $($btn.Count)"; return }
-  Press $btn[2]
+  Answer $r $d 'decline'
   $gone = WaitFor { if ((AppProcesses $Exe).Count -eq 0) { $true } } 20
   $r.exited = [bool]$gone
   $r.stateRecorded = Test-Path (StateFile $th)
-  $r.ok = $r.exited -and -not $r.stateRecorded -and -not $r.dllLoadedBeforeAnswer -and ($r.windowsBeforeAnswer | Where-Object { $_ -ne '#32770' }).Count -eq 0
+  $r.ok = $r.exited -and -not $r.stateRecorded -and -not $r.dllLoadedBeforeAnswer -and @($r.windowsBeforeAnswer | Where-Object { -not $_.StartsWith('#32770|') }).Count -eq 0
   if ($r.dllLoadedBeforeAnswer) { $r.notes += 'DLL yanit verilmeden yuklendi' }
   StopApp $Exe
 }
@@ -123,7 +148,7 @@ Scenario 'accept' {
   if (-not $d) { $r.notes += 'iletisim kutusu cikmadi'; return }
   $first = $p.Id
   $r.dllLoadedBeforeAnswer = DllLoaded $Exe
-  Press (Buttons $d)[0]
+  Answer $r $d 'accept'
   $r.stateRecorded = [bool](WaitFor { Test-Path (StateFile $th) } 15)
   if ($r.stateRecorded) { $r.state = Get-Content (StateFile $th) -Raw | ConvertFrom-Json }
   # The app starts itself again (a new process) and opens its main window.
@@ -175,7 +200,9 @@ $summary = [ordered]@{
   notAutomated = 'Kosullari oku dugmesi metni baska bir programda acar; otomatik denenmedi'
   scenarios = $results
 }
-$summary | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Out 'terms-flow.json')
+$json = $summary | ConvertTo-Json -Depth 6
+$json | Set-Content -Encoding UTF8 (Join-Path $Out 'terms-flow.json')
+Write-Host $json
 Remove-Item Env:\ZEYVOLA_TEST_HOME -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 $failed = @($results | Where-Object { -not $_.ok }).Count

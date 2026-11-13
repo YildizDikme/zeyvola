@@ -2,11 +2,11 @@
 // bundled package has no notice, a license falls outside the policy, or
 // docs/THIRD_PARTY_NOTICES.md is out of date. Runs after the main and renderer builds.
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..', '..');
-const { collect, writeDist, NOTICES_PATH, renderMarkdown } = await import(resolve(root, 'tools', 'third-party-notices.mjs'));
+const { collect, writeDist, NOTICES_PATH, renderMarkdown } = await import(pathToFileURL(resolve(root, 'tools', 'third-party-notices.mjs')).href);
 const { readFileSync } = await import('node:fs');
 
 // The app's own notices list only the codec rows of the distribution being built (ZEYVOLA_DIST).

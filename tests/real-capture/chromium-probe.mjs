@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..');
@@ -24,7 +24,7 @@ const electronApp = join(dirname(req.resolve('electron/package.json')), 'dist', 
 let work = null;
 let exe = join(electronApp, 'Contents', 'MacOS', 'Electron');
 if (!stock) {
-  const { cached } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
+  const { cached } = await import(pathToFileURL(join(root, 'tools', 'electron-artifacts.mjs')).href);
   const zip = cached(`ffmpeg:darwin:${process.arch}`);
   if (!zip) { console.error(`Önce: node tools/electron-artifacts.mjs ffmpeg:darwin:${process.arch}`); process.exit(1); }
   work = mkdtempSync(join(tmpdir(), 'zeyvola-chromium-probe-'));

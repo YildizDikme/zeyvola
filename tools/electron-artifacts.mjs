@@ -12,7 +12,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(join(ROOT, 'apps', 'desktop', 'package.json'));
@@ -21,7 +21,7 @@ export const ELECTRON_VERSION = JSON.parse(readFileSync(join(electronDir, 'packa
 
 async function getter() {
   const r = createRequire(join(electronDir, 'package.json'));
-  return import(r.resolve('@electron/get'));
+  return import(pathToFileURL(r.resolve('@electron/get')).href);
 }
 
 function details(spec) {

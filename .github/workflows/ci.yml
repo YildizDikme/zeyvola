@@ -26,7 +26,7 @@ jobs:
     runs-on: macos-latest
     env:
       # Electron's download cache (electron/install.js, tools/electron-artifacts.mjs), outside the checkout.
-      electron_config_cache: ${{ github.workspace }}/../electron-cache
+      electron_config_cache: ${{ github.workspace }}/.cache/ci-electron  # no '..': actions/cache refuses it; .cache/ is git-ignored
     steps:
       - uses: actions/checkout@v4
         with:

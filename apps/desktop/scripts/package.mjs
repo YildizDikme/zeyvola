@@ -22,14 +22,14 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, '..');
 const root = resolve(appDir, '..', '..');
-const { artifact, cached, extractZip, ELECTRON_VERSION } = await import(join(root, 'tools', 'electron-artifacts.mjs'));
-const { writeDist } = await import(join(root, 'tools', 'third-party-notices.mjs'));
-const { setVersionInfo } = await import(join(root, 'tools', 'win-version-info.mjs'));
+const { artifact, cached, extractZip, ELECTRON_VERSION } = await import(pathToFileURL(join(root, 'tools', 'electron-artifacts.mjs')).href);
+const { writeDist } = await import(pathToFileURL(join(root, 'tools', 'third-party-notices.mjs')).href);
+const { setVersionInfo } = await import(pathToFileURL(join(root, 'tools', 'win-version-info.mjs')).href);
 
 const arg = (name, fallback) => { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; };
 // The released distribution is A (since 2026-11-13, docs/denetim/2026-11-13-mp4-h264-karari.md):

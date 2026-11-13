@@ -23,7 +23,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = join(ROOT, 'tools', '.cache');
@@ -190,7 +190,7 @@ export function ffmpegCodecs(dylib) {
 }
 
 async function officialZipEntry(spec, entry) {
-  const { cached, extractZip } = await import(join(ROOT, 'tools', 'electron-artifacts.mjs'));
+  const { cached, extractZip } = await import(pathToFileURL(join(ROOT, 'tools', 'electron-artifacts.mjs')).href);
   const zip = cached(spec);
   if (!zip) return null;
   const work = mkdtempSync(join(tmpdir(), 'zeyvola-audit-'));
@@ -360,7 +360,7 @@ export async function audit(dir, profile, { probe = false, release = false } = {
   const tp = join(lic, 'third-party.json');
   if (existsSync(tp)) {
     const j = JSON.parse(readFileSync(tp, 'utf8'));
-    const { shippedPackages } = await import(join(ROOT, 'tools', 'third-party-notices.mjs'));
+    const { shippedPackages } = await import(pathToFileURL(join(ROOT, 'tools', 'third-party-notices.mjs')).href);
     const want = shippedPackages(ROOT).map((p) => `${p.name}@${p.version}`).sort();
     const have = j.packages.map((p) => `${p.name}@${p.version}`).sort();
     notices.packages = have.length;
