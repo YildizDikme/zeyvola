@@ -65,6 +65,10 @@ for (const f of files.filter((x) => /dll-watch-.*\.json$|removed-dll\.json$/.tes
     say();
   }
 }
+for (const f of files.filter((x) => x.endsWith('codec-audit-release-win32-x64.json'))) {
+  const r = read(f);
+  if (r) say(`## ${relative(out, f)}: ${r.ok ? 'uygun' : 'SORUNLU'}\nhatalar: ${JSON.stringify(r.fails ?? [])}\nyayın engelleri: ${JSON.stringify(r.blockers ?? [])}\nuyarılar/notlar: ${JSON.stringify(r.warnings ?? r.notes ?? [])}\n`);
+}
 for (const f of files.filter((x) => x.endsWith('helper-encode-probe.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 for (const f of files.filter((x) => x.endsWith('uitest-clicks.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 

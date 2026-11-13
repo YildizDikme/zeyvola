@@ -15,6 +15,7 @@ Bu liste, Zeyvola'nın Windows sürümünü gerçek bir Windows 10 ya da 11 bilg
 - `Zeyvola-<sürüm>-windows-x64.zip` dosyası (GitHub **Releases** sayfasından). Zip yaklaşık 150 MB, açılınca yaklaşık 420 MB yer kaplar (0.1.0 deneme paketinde ölçüldü). Kayıt ve dışa aktarılan videolar için de biraz yer gerekir.
 - Kamera ve mikrofon (dizüstü bilgisayarın kendi kamerası ve mikrofonu yeterli).
 - Bir tarayıcı (Edge ya da Chrome): WebM dosyasını açmak için.
+- Windows'un **Paint** programı: renk ve şekil kontrolü için (4. adım).
 
 ## Başlamadan
 Windows sürümünü not alın: **Ayarlar › Sistem › Hakkında** (*Settings › System › About*). "Sürüm" (*Edition*) ve "Sürüm numarası" (*Version*) satırları yeterli. Sürüm adının sonunda **N** varsa (ör. "Windows 11 Pro N") bunu ayrıca yazın.
@@ -44,11 +45,13 @@ Windows sürümünü not alın: **Ayarlar › Sistem › Hakkında** (*Settings 
 
 **Olmadıysa not al:** Kamera ya da mikrofon listede yoksa veya çubuk hiç kıpırdamıyorsa bunu yazın. (Gerekirse **Ayarlar › Gizlilik ve güvenlik › Kamera / Mikrofon** altında "Masaüstü uygulamalarının erişmesine izin ver" açık olmalı; *Settings › Privacy & security › Camera / Microphone › Let desktop apps access…*.)
 
-## 4. Kayıt (1 dk)
-**Yap:** **Kaydı başlat** (*Start recording*) düğmesine tıklayın. Geri sayımdan sonra yaklaşık **20 saniye** kaydedin:
+## 4. Kayıt (1–2 dk)
+**Yap (kayıttan önce, renk ve şekil için):** Windows'un **Paint** programını açın. Kalın bir fırçayla dört ayrı leke yapın: **kırmızı**, **yeşil**, **mavi** ve **eflatun (mor-pembe)**. Sonra şekiller arasından **Elips** (*Ellipse*) aracını seçip **Shift** tuşunu basılı tutarak büyükçe bir **daire** çizin. Paint penceresi ekranda açık kalsın; kayıt sırasında görünecek. (Bir dakikayı geçmesin; düzgün olması gerekmez.)
+
+**Yap:** Zeyvola'ya dönüp **Kaydı başlat** (*Start recording*) düğmesine tıklayın. Geri sayımdan sonra yaklaşık **20 saniye** kaydedin:
 - Kayıt boyunca konuşun (ör. "bir, iki, üç…").
 - Ekranda birbirinden uzak **4–5 farklı yere** tıklayın (ör. bir klasör penceresinde dosyalara, Başlat düğmesine). Her tıklamadan sonra 2–3 saniye bekleyin.
-- Ekranda yuvarlak bir şey (ör. hesap resminiz) görünüyorsa kayda girmesine çalışın; 5. adımda şeklini kontrol edeceğiz.
+- Tıklamalardan birkaçını Paint penceresinin üstüne yapın; renklerin ve dairenin kayıtta iyice görünmesi için.
 
 Bitirmek için kayıt sırasında ekranda duran küçük çubuktaki **Bitir** (*Finish*) düğmesine basın ya da **Alt+Shift+S** tuşlarına basın. (Ekranda kısayol başka işaretlerle, ör. **⌥⇧S**, yazıyorsa da Windows'ta karşılığı Alt+Shift+S'dir; bunu da not alın.)
 
@@ -66,9 +69,10 @@ Bitirmek için kayıt sırasında ekranda duran küçük çubuktaki **Bitir** (*
 **Görmelisin:**
 - Görüntü tıkladığınız yerlere yakınlaşıyor.
 - Sesiniz duyuluyor.
-- Yuvarlak şeyler yuvarlak (basık ya da uzamış değil). Zeyvola "Ekran görüntüsü kayıtta basık geldi…" (*The screen picture arrived squeezed…*) diye bir uyarı gösterdiyse yazısını not alın; bu bilinen bir durum.
+- **Renkler ekrandakiyle aynı:** Paint'teki kırmızı kırmızı, yeşil yeşil, mavi mavi, eflatun eflatun görünüyor. (Örneğin eflatunun yeşil çıkması bir hatadır.)
+- **Daire hâlâ daire:** basık ya da uzamış değil. Zeyvola "Ekran görüntüsü kayıtta basık geldi…" (*The screen picture arrived squeezed…*) diye bir uyarı gösterdiyse yazısını not alın; bu bilinen bir durum.
 
-**Olmadıysa not al:** Zoom bloğu hiç yoksa ya da tıklamalardan çok uzaksa, kamera görünmüyorsa, ses yoksa yazın. Zoom yoksa Zeyvola'nın bir mesaj gösterip göstermediğini de yazın.
+**Olmadıysa not al:** Renkler farklıysa ya da daire bozuksa: Paint penceresinin ve Zeyvola önizlemesinin **ikisinin de** ekran görüntüsünü alın (**Windows logo tuşu + Shift + S**; *Win + Shift + S*) ve hangi rengin neye döndüğünü yazın (ör. "eflatun → yeşil"). Zoom bloğu hiç yoksa ya da tıklamalardan çok uzaksa, kamera görünmüyorsa, ses yoksa yazın. Zoom yoksa Zeyvola'nın bir mesaj gösterip göstermediğini de yazın.
 
 ## 6. MP4 dışa aktarma (2 dk)
 **Yap:** Düzenleyicideki **Dışa aktar** (*Export*) düğmesine tıklayın (ya da **Ctrl+E**). Formatın **MP4 · H.264** olduğundan emin olun.
@@ -82,16 +86,16 @@ Bitirmek için kayıt sırasında ekranda duran küçük çubuktaki **Bitir** (*
 
 **Görmelisin:** İlerleme çubuğu, sonra **Hazır** (*Done*). **Klasörde göster** (*Show in folder*) ile dosyayı bulun ve çift tıklayarak Windows'un kendi oynatıcısında açın.
 
-**Görmelisin:** Görüntü **ve** ses var, zoom'lar ve kamera önizlemedeki gibi.
+**Görmelisin:** Görüntü **ve** ses var, zoom'lar ve kamera önizlemedeki gibi. Paint'teki renkler ve daire burada da ekrandakiyle aynı.
 
-**Olmadıysa not al:** Dışa aktarma ne kadar sürdü (yaklaşık), hata yazısı, oynatıcıda yalnızca ses ya da yalnızca görüntü olup olmadığı, "MP4 yerine WebM olarak kaydedildi." (*Saved as WebM instead of MP4.*) yazısı çıktıysa bu.
+**Olmadıysa not al:** Dışa aktarma ne kadar sürdü (yaklaşık), hata yazısı, oynatıcıda yalnızca ses ya da yalnızca görüntü olup olmadığı, "MP4 yerine WebM olarak kaydedildi." (*Saved as WebM instead of MP4.*) yazısı çıktıysa bu; renkler ya da daire farklıysa oynatıcıdaki görüntünün ekran görüntüsü.
 
 ## 7. WebM dışa aktarma (1 dk)
 **Yap:** Yeniden **Dışa aktar**, bu kez format **WebM · VP9**. **Dışa aktar**'a basın.
 
-**Görmelisin:** **Hazır**. Dosyayı bir tarayıcı penceresine (Edge ya da Chrome) sürükleyip bırakın: görüntü ve ses oynar.
+**Görmelisin:** **Hazır**. Dosyayı bir tarayıcı penceresine (Edge ya da Chrome) sürükleyip bırakın: görüntü ve ses oynar; renkler ve daire ekrandakiyle aynı.
 
-**Olmadıysa not al:** Hata yazısı; tarayıcıda görüntü ya da ses yoksa bu.
+**Olmadıysa not al:** Hata yazısı; tarayıcıda görüntü ya da ses yoksa bu; renkler ya da daire farklıysa oynatılan videonun ekran görüntüsü.
 
 ## 8. Kısa kontroller (1 dk)
 - **Geri al:** Zaman çizelgesinde bir zoom bloğuna tıklayın, **Delete** tuşuyla silin, sonra **Ctrl+Z**'ye basın. *Görmelisin:* blok geri gelir.
@@ -112,4 +116,5 @@ Bitirmek için kayıt sırasında ekranda duran küçük çubuktaki **Bitir** (*
 - Takılan adımın numarası ve gördüğünüz hata yazısı (aynen).
 - Mümkünse takılan yerin ekran görüntüsü (kişisel bilgi görünmesin).
 - 6. adımdaki **Kodlayıcı:** satırı.
+- Renk ve daire kontrolünün sonucu (5., 6. ve 7. adımlar): önizlemede, MP4'te ve WebM'de renkler ekrandakiyle aynı mıydı, daire daire miydi? Farklıysa hangi renk neye döndü ve iki ekran görüntüsü (Paint ile Zeyvola önizlemesi ya da oynatılan video).
 - Dışa aktarılan iki dosya (MP4 ve WebM). Kayıtta kişisel bilgi görünüyorsa göndermeden önce söyleyin.

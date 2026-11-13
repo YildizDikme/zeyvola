@@ -412,14 +412,31 @@ export async function runUiTest(): Promise<unknown> {
       checks.push({
         name: 'Gerçek ekran kaydı: ekrandaki bilinen kare kayıtta (uygulamanın çizdiği haliyle) kare kalır, yeri ve boyutu doğru',
         ok: !!f && drawn !== null && Math.abs(drawn - 1) < 0.02 && near(f.fx, e.fx) && near(f.fy, e.fy) && near(f.fw, e.fw) && near(f.fh, e.fh),
+        // Not found at all is a known issue for now (user decision 2026-11-13): it must not stop a release.
+        ...(!f ? { known: 'bilinen kare videoda bulunamadı; ölçüm sonra düzeltilecek' } : {}),
         detail: !f ? `kare videoda bulunamadı · sürücü: ${JSON.stringify(rc.shape.driver)} · videoda o noktada: ${JSON.stringify(rc.shape.samples)}` : `çizilen en/boy ${drawn}, dosyanın karelerinde ${ratio}${rc.source?.displayAspect ? ` (displayAspect ${rc.source.displayAspect.toFixed(4)} saklandı)` : ''} (1 olmalı) · ekranda x ${e.fx.toFixed(3)} y ${e.fy.toFixed(3)} g ${e.fw.toFixed(3)} y ${e.fh.toFixed(3)} · videoda x ${f.fx.toFixed(3)} y ${f.fy.toFixed(3)} g ${f.fw.toFixed(3)} y ${f.fh.toFixed(3)}`,
       });
+      // Colours: the square's colour in the recording against what the driver read off the screen.
+      const screenRgb = (rc.shape.driver as { screenColor?: unknown } | null)?.screenColor;
+      const videoRgb = f && 'rgb' in f ? (f as { rgb: [number, number, number] }).rgb : null;
+      if (Array.isArray(screenRgb) && videoRgb) {
+        const dist = Math.abs(videoRgb[0] - Number(screenRgb[0])) + Math.abs(videoRgb[1] - Number(screenRgb[1])) + Math.abs(videoRgb[2] - Number(screenRgb[2]));
+        checks.push({
+          name: 'Gerçek ekran kaydı: renkler doğru (ekrandaki eflatun kare kayıtta da eflatun)',
+          ok: dist < 60,
+          detail: `ekranda RGB ${JSON.stringify(screenRgb)}, kayıtta ${JSON.stringify(videoRgb)} (fark ${dist})`,
+          // Measured on the Windows runner (Hyper-V display, WARP): magenta recorded as green, the colour
+          // difference channels inverted. Reported, not a release stop, until checked on a real PC.
+          ...(dist >= 60 ? { known: 'ekran kaydında renk bozulması (eflatun→yeşil, renk farkı kanalları ters); gerçek PC\'de doğrulanacak' } : {}),
+        });
+      }
     }
     if (rc?.exported) {
       const x = rc.exported;
       checks.push({
         name: 'Gerçek ekran kaydı dışa aktarılınca (WebM 1080p) bilinen kare yine kare',
         ok: 'ratio' in x && x.ratio !== null && Math.abs(x.ratio - 1) < 0.02,
+        ...('found' in x && !x.found ? { known: 'bilinen kare dışa aktarılan videoda bulunamadı; ölçüm sonra düzeltilecek' } : {}),
         detail: 'error' in x ? `dışa aktarma: ${x.error}` : x.found ? `en/boy ${x.ratio} (1 olmalı), videoda g ${x.found.fw.toFixed(3)} y ${x.found.fh.toFixed(3)}, ${x.seconds} sn` : 'kare dışa aktarılan videoda bulunamadı',
       });
     }
@@ -588,13 +605,13 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
     if (log.shape && src) {
       // MediaRecorder's WebM has no index, so a seek may not reach the time asked for: look at
       // several moments and use the first that shows the square.
-      let found: MagentaProbe | null = null;
+      let found: (MagentaProbe & { rgb: [number, number, number] }) | null = null;
       const samples: unknown[] = [];
       const cx = log.shape.fx + log.shape.fw / 2;
       const cy = log.shape.fy + log.shape.fh / 2;
       for (const at of [3, 2, 4, 5, 1.5]) {
         samples.push(await colorAt(url(src.file), at, cx, cy));
-        found ??= await magentaBox(url(src.file), at);
+        found ??= await magentaBox(url(src.file), at, { cx, cy, fw: log.shape.fw, fh: log.shape.fh });
         if (found) break;
       }
       // Square on screen → square in the picture: width / height of its box in video pixels.
@@ -609,8 +626,12 @@ async function recordScreen(shots: string[]): Promise<RealCapture> {
       const t0 = performance.now();
       const r = await routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format: 'webm', resolution: '1080', fps: 30, quality: 'standard', includeAudio: false }, () => undefined, new AbortController().signal);
       if (r.phase === 'done' && r.path) {
-        let box: MagentaProbe | null = null;
-        for (const at of [3, 2, 4]) { box = await magentaBox(url(exportsRel(r.path)), at); if (box) break; }
+        let box: (MagentaProbe & { rgb: [number, number, number] }) | null = null;
+        // The 4:3 screen sits centered in the 16:9 frame: the square's middle keeps its place in the
+        // screen's height and moves in its width by the pillar.
+        const screenShare = (src.displayAspect ?? (screen ? screen.width / screen.height : 16 / 9)) / (16 / 9);
+        const near = { cx: 0.5 + (cx - 0.5) * screenShare, cy, fw: log.shape.fw * screenShare, fh: log.shape.fh };
+        for (const at of [3, 2, 4]) { box = await magentaBox(url(exportsRel(r.path)), at, near); if (box) break; }
         exported = { seconds: Math.round((performance.now() - t0) / 100) / 10, found: box, ratio: box ? Math.round(((box.fw * 1920) / (box.fh * 1080)) * 1000) / 1000 : null };
       } else {
         exported = { error: r.message ?? r.phase };
@@ -676,7 +697,14 @@ async function colorAt(src: string, at: number, cx: number, cy: number): Promise
   return { wanted: at, reached: Math.round(reached * 100) / 100, rgb: sum.map((x) => Math.round(x / (d.length / 4))) as [number, number, number] };
 }
 
-async function magentaBox(src: string, at: number): Promise<MagentaProbe | null> {
+/**
+ * Box of the driver's square in a frame, as fractions of the frame, found by its colour *in this
+ * video* (the colour at the square's expected middle), so a recording with wrong colours (measured on
+ * the Windows runner: magenta came out green) is still measured for its shape. The search stays in a
+ * window around the expected place (`near`: middle and size as fractions), where the square's black
+ * frame separates it from the desktop.
+ */
+async function magentaBox(src: string, at: number, near: { cx: number; cy: number; fw: number; fh: number }): Promise<(MagentaProbe & { rgb: [number, number, number] }) | null> {
   const v = document.createElement('video');
   v.muted = true;
   v.crossOrigin = 'anonymous';
@@ -694,14 +722,27 @@ async function magentaBox(src: string, at: number): Promise<MagentaProbe | null>
   const d = g.getImageData(0, 0, w, h).data;
   v.removeAttribute('src');
   v.load();
+  const px = (x: number, y: number) => (y * w + x) * 4;
+  // The square's own colour in this video: mean of 8×8 pixels at its expected middle.
+  const mx = Math.round(near.cx * w);
+  const my = Math.round(near.cy * h);
+  const ref: [number, number, number] = [0, 0, 0];
+  for (let y = my - 4; y < my + 4; y++) for (let x = mx - 4; x < mx + 4; x++) { const i = px(x, y); ref[0] = ref[0] + d[i]!; ref[1] = ref[1] + d[i + 1]!; ref[2] = ref[2] + d[i + 2]!; }
+  const rgb = ref.map((x) => Math.round(x / 64)) as [number, number, number];
+  // A square must stand out from its black frame; a near-black middle means it is not there.
+  if (rgb[0] + rgb[1] + rgb[2] < 90) return null;
+  const xa = Math.max(0, Math.floor((near.cx - near.fw) * w));
+  const xb = Math.min(w - 1, Math.ceil((near.cx + near.fw) * w));
+  const ya = Math.max(0, Math.floor((near.cy - near.fh) * h));
+  const yb = Math.min(h - 1, Math.ceil((near.cy + near.fh) * h));
   let x0 = w; let y0 = h; let x1 = -1; let y1 = -1;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (d[i]! > 150 && d[i + 1]! < 110 && d[i + 2]! > 150) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  for (let y = ya; y <= yb; y++) {
+    for (let x = xa; x <= xb; x++) {
+      const i = px(x, y);
+      if (Math.abs(d[i]! - rgb[0]) + Math.abs(d[i + 1]! - rgb[1]) + Math.abs(d[i + 2]! - rgb[2]) < 90) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     }
   }
-  return x1 < 0 ? null : { fx: x0 / w, fy: y0 / h, fw: (x1 - x0 + 1) / w, fh: (y1 - y0 + 1) / h };
+  return x1 < 0 ? null : { fx: x0 / w, fy: y0 / h, fw: (x1 - x0 + 1) / w, fh: (y1 - y0 + 1) / h, rgb };
 }
 
 /** Uniform dark columns or rows at the frame's edges (letterbox/pillarbox), in pixels of the video. */

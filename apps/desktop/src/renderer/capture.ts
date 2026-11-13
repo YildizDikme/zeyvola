@@ -101,13 +101,13 @@ type Processor = new (init: { track: MediaStreamTrack }) => { readable: Readable
  * stale right after a change). Frames are taken for `settleMs` and the last one counts, so a
  * size change after applyConstraints is seen. Falls back to the settings.
  */
-async function deliveredSize(track: MediaStreamTrack, settleMs = 400): Promise<Partial<PixelSize>> {
+async function deliveredSize(track: MediaStreamTrack, settleMs = 400): Promise<Partial<PixelSize> & { format?: string | null; colorSpace?: unknown }> {
   const fromSettings = () => { const st = track.getSettings(); return { width: st.width, height: st.height }; };
   const P = (globalThis as { MediaStreamTrackProcessor?: Processor }).MediaStreamTrackProcessor;
   if (!P) return fromSettings();
   const copy = track.clone();
   const reader = new P({ track: copy }).readable.getReader();
-  let size: Partial<PixelSize> | null = null;
+  let size: (Partial<PixelSize> & { format?: string | null; colorSpace?: unknown }) | null = null;
   const until = performance.now() + settleMs;
   const giveUp = performance.now() + 3000; // no frame at all: judge by the settings
   try {
@@ -117,7 +117,9 @@ async function deliveredSize(track: MediaStreamTrack, settleMs = 400): Promise<P
       if (left <= 0) break;
       const r = await Promise.race([reader.read().catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), left))]);
       if (!r || r.done) break;
-      size = { width: r.value.displayWidth, height: r.value.displayHeight };
+      // Pixel format and colour space (WebCodecs) only for the test log: colours were measured
+      // wrong on Windows CI, and these are what the browser says it delivers.
+      size = { width: r.value.displayWidth, height: r.value.displayHeight, format: r.value.format, colorSpace: r.value.colorSpace?.toJSON?.() ?? null };
       r.value.close();
     }
   } finally {
@@ -142,18 +144,30 @@ async function ensureShape(track: MediaStreamTrack, kind: CaptureConfig['target'
     kind, display, capabilities: sizeOnly(track.getCapabilities?.() ?? {}), settings: sizeOnly(track.getSettings()), firstFrame: first, attempts: [] as unknown[],
   };
   let check = checkFrame(kind, display, first);
-  for (const [i, c] of correctionConstraints(display, fps).entries()) {
+  // Which step gave the final frames: 'initial' (first request), a correction's name, or
+  // 'display-aspect' (none did: recorded as delivered, drawn with the display's shape).
+  let held: string = check.ok ? 'initial' : 'display-aspect';
+  for (const [i, { name, constraints }] of correctionConstraints(display, fps).entries()) {
     if (check.ok) break;
     let frame: Partial<PixelSize> | null = null;
     let error: string | null = null;
+    let constraint: string | null = null;
+    let accepted = false;
     try {
-      await track.applyConstraints(c);
+      await track.applyConstraints(constraints);
+      accepted = true;
       frame = await deliveredSize(track, 600);
       check = checkFrame(kind, display, frame);
-    } catch (e) { error = (e as Error).name; }
-    (report.attempts as unknown[]).push({ attempt: i + 1, error, frame, settings: sizeOnly(track.getSettings()), ok: check.ok });
+      if (check.ok) held = name;
+    } catch (e) {
+      error = (e as Error).name;
+      // OverconstrainedError names the constraint the browser could not meet.
+      constraint = (e as { constraint?: string }).constraint ?? null;
+    }
+    (report.attempts as unknown[]).push({ attempt: i + 1, name, accepted, error, constraint, frame, settings: sizeOnly(track.getSettings()), ok: check.ok });
   }
   report.ok = check.ok;
+  report.held = held;
   console.info(`[zeyvola:capture-shape] ${JSON.stringify(report)}`);
 }
 

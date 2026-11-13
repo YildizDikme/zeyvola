@@ -89,7 +89,18 @@ jobs:
         id: package
         if: env.PACKAGED == 'true' && steps.zig.outcome == 'success'
         continue-on-error: true
-        run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64 --experimental-windows
+        run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64
+
+      # The release audit of the Windows package as release-assets.mjs runs it (--release --probe):
+      # for the report only; Windows Beta has no release blockers left, warnings are listed. The FFmpeg
+      # source archive release-assets also needs is not fetched here, so its line is expected.
+      - name: Yayın denetimi (bilgi) / release audit (information)
+        if: steps.package.outcome == 'success'
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:OUT" | Out-Null
+          node tools/codec-audit.mjs apps/desktop/out/mp4/win32-x64 --profile mp4 --probe --release --json "$env:OUT\codec-audit-release-win32-x64.json"
+          Write-Host "codec-audit --release çıkış kodu: $LASTEXITCODE"
 
       # The helper's own encoder check, as the app runs it before an export (route 2).
       - name: Yardımcı kodlama sondası / helper encode probe

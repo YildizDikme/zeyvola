@@ -49,10 +49,16 @@ describe('checkFrame', () => {
 });
 
 describe('correctionConstraints', () => {
-  it('tries the exact size first, then the exact shape', () => {
-    const [size, shape] = correctionConstraints({ width: 1024, height: 768 }, 30);
-    expect(size).toMatchObject({ width: { exact: 1024 }, height: { exact: 768 } });
-    expect(shape).toMatchObject({ aspectRatio: { exact: 4 / 3 } });
+  it('tries no browser scaling first, then the exact size, then the exact shape', () => {
+    const chain = correctionConstraints({ width: 1024, height: 768 }, 30);
+    expect(chain.map((c) => c.name)).toEqual(['resize-none', 'exact-size', 'exact-aspect']);
+    expect(chain[0]!.constraints).toEqual({ resizeMode: 'none', frameRate: { ideal: 30, max: 30 } });
+    expect(chain[1]!.constraints).toMatchObject({ width: { exact: 1024 }, height: { exact: 768 } });
+    expect(chain[2]!.constraints).toMatchObject({ aspectRatio: { exact: 4 / 3 } });
+  });
+
+  it('is not part of the first request: frames with the right shape keep the old constraints', () => {
+    expect(displayVideoConstraints('display', { width: 1024, height: 768 }, 30).resizeMode).toBeUndefined();
   });
 });
 

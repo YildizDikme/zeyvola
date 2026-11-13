@@ -19,6 +19,9 @@ export type CaptureTargetKind = 'display' | 'window' | 'region';
 
 export interface PixelSize { width: number; height: number }
 
+/** MediaTrackConstraints with `resizeMode` (W3C Media Capture and Streams; missing from TypeScript's DOM types). */
+export type CaptureConstraints = MediaTrackConstraints & { resizeMode?: ConstrainDOMString };
+
 /** Two shapes differ by more than this (relative) → the picture would be visibly distorted. */
 export const ASPECT_TOLERANCE = 0.01;
 
@@ -28,7 +31,7 @@ export const ASPECT_TOLERANCE = 0.01;
  * size and shape. A window's shape is its own, so only the frame rate is asked for besides the
  * size limit; the browser then delivers the window as it is.
  */
-export function displayVideoConstraints(kind: CaptureTargetKind, display: PixelSize, fps: number): MediaTrackConstraints {
+export function displayVideoConstraints(kind: CaptureTargetKind, display: PixelSize, fps: number): CaptureConstraints {
   const frameRate = { ideal: fps, max: fps };
   if (kind === 'window') return { width: { ideal: display.width }, height: { ideal: display.height }, frameRate };
   return {
@@ -59,16 +62,26 @@ export function checkFrame(kind: CaptureTargetKind, expected: PixelSize, actual:
   return Math.abs(ratio - 1) <= slack ? { ok: true } : { ok: false, expected, actual: { width: w, height: h }, ratio };
 }
 
+/** One correction to try: a name for the test log, and the constraints for applyConstraints. */
+export interface Correction { name: 'resize-none' | 'exact-size' | 'exact-aspect'; constraints: CaptureConstraints }
+
 /**
  * Constraint sets to try, in order, on a track whose frames came back with the wrong shape:
- * first the display's exact size, then only its exact shape (any size the browser offers).
- * Either may be refused (OverconstrainedError); the caller checks the frames after each.
+ *   1. `resizeMode: 'none'`: no browser scaling at all, so the display's own frames, at its own
+ *      size (W3C Media Capture: "none" = the resolution offered by the source). Measured on
+ *      Windows CI: the browser offers it (capabilities) but delivered "crop-and-scale" frames.
+ *      Not yet measured whether asking for it helps; the test log says.
+ *   2. the display's exact size;
+ *   3. only its exact shape (any size the browser offers).
+ * Any may be refused (OverconstrainedError); the caller checks the frames after each. Tracks
+ * whose frames have the right shape never get here, so nothing changes for them.
  */
-export function correctionConstraints(display: PixelSize, fps: number): MediaTrackConstraints[] {
+export function correctionConstraints(display: PixelSize, fps: number): Correction[] {
   const frameRate = { ideal: fps, max: fps };
   return [
-    { width: { exact: display.width }, height: { exact: display.height }, frameRate },
-    { aspectRatio: { exact: display.width / display.height }, width: { max: display.width }, height: { max: display.height }, frameRate },
+    { name: 'resize-none', constraints: { resizeMode: 'none', frameRate } },
+    { name: 'exact-size', constraints: { width: { exact: display.width }, height: { exact: display.height }, frameRate } },
+    { name: 'exact-aspect', constraints: { aspectRatio: { exact: display.width / display.height }, width: { max: display.width }, height: { max: display.height }, frameRate } },
   ];
 }
 
