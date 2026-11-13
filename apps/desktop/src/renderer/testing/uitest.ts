@@ -18,14 +18,18 @@
  * work together from the first screen to the exported file.
  */
 import { parseProject, sequenceDuration } from '@zeyvola/project-model';
+import { secondsToTicks } from '@zeyvola/timing';
 import { TICKS_PER_SECOND } from '@zeyvola/timing';
 import { Mp4Writer } from '@zeyvola/media-web';
 import { PROFILE, DIST } from '../../shared/distribution';
 import { api } from '../api';
+import { renderStill } from '../export/exporter';
+import type { EditorStore } from '../state/editor-store';
+import { avcProfileName, compareFrames, mp4Tracks, sharpness } from './mp4-stats';
 import { t } from '../i18n';
 import { recordLikeBrowser } from '../smoke-fixtures';
 import {
-  all, button, click, createSampleProject, currentEditor, decodeSound, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, screenshot, sleep, text, until, type Check,
+  all, button, click, cpuNow, cpuPercent, createSampleProject, currentEditor, decodeSound, frame, invoke, key, mediaUrl, Missing, option, peak, pressAt, probeVideo, q, screenshot, sleep, text, until, type Check,
 } from './harness';
 
 export async function runUiTest(): Promise<unknown> {
@@ -48,6 +52,9 @@ export async function runUiTest(): Promise<unknown> {
 
   // A sample recording made the way the Chromium recording path makes them, on disk before the
   // interface is touched: the list must show it like any project made earlier.
+  const env = await invoke<{ realCapture: boolean; only: string | null; expectRoute: string | null }>('smoke:realRecording', { op: 'env' });
+  /** ZEYVOLA_UITEST_ONLY=export: only the project list and the export steps (CI's extra runs). */
+  const editing = env.only !== 'export';
   const sample = await createSampleProject(8, 'Arayüz testi', recordLikeBrowser);
   const fileBase = () => currentEditor(sample.id)!.store.getState().mediaBase;
 
@@ -68,14 +75,14 @@ export async function runUiTest(): Promise<unknown> {
   const autoZooms = () => store.project.zooms.filter((z) => z.origin === 'auto').length;
   const manualZooms = () => store.project.zooms.filter((z) => z.origin === 'manual').length;
 
-  await step('İlk açılış: otomatik zoom önerileri zaman çizelgesinde görünür', async () => {
+  if (editing) await step('İlk açılış: otomatik zoom önerileri zaman çizelgesinde görünür', async () => {
     expect(await until(() => autoZooms() > 0, 12_000), 'öneri oluşmadı');
     expect(await until(() => all('.tl-item.tl-zoom.is-auto').length === autoZooms(), 3000), `çizelgede ${all('.tl-item.tl-zoom.is-auto').length}, projede ${autoZooms()} öneri`);
     await until(() => store.getState().save === 'saved', 5000);
     return `${autoZooms()} öneri`;
   });
 
-  await step('Düzenleme: zoom aracıyla önizlemeye basınca elle zoom eklenir; geri al ve yinele çalışır', async () => {
+  if (editing) await step('Düzenleme: zoom aracıyla önizlemeye basınca elle zoom eklenir; geri al ve yinele çalışır', async () => {
     // A moment without a zoom, so the press adds one instead of re-aiming an existing one.
     key('Home');
     click(option(t("Araç"), t("Zoom")), 'Zoom aracı');
@@ -105,7 +112,7 @@ export async function runUiTest(): Promise<unknown> {
     return `${before.length} zoom → elle 1 eklendi, ${replaced.length} öneri yerini verdi → ${store.project.zooms.length} zoom`;
   });
 
-  await step('Düzenleme: oynat düğmesi önizlemeyi oynatır, zaman göstergesi ilerler, duraklat durdurur', async () => {
+  if (editing) await step('Düzenleme: oynat düğmesi önizlemeyi oynatır, zaman göstergesi ilerler, duraklat durdurur', async () => {
     key('Home');
     await sleep(300);
     const shown = () => text(q('.timecode'));
@@ -124,7 +131,7 @@ export async function runUiTest(): Promise<unknown> {
     return `imleç ${sec.toFixed(2)} sn`;
   });
 
-  await step('Düzenleme: S tuşu klibi oynatma imlecinden böler, geri al birleştirir', async () => {
+  if (editing) await step('Düzenleme: S tuşu klibi oynatma imlecinden böler, geri al birleştirir', async () => {
     const before = store.project.sequence.segments.length;
     key('s');
     expect(await until(() => store.project.sequence.segments.length === before + 1, 2000), 'klip bölünmedi');
@@ -133,7 +140,7 @@ export async function runUiTest(): Promise<unknown> {
     expect(await until(() => store.project.sequence.segments.length === before, 2000), 'geri al bölmeyi kaldırmadı');
   });
 
-  await step('Otomatik zoom: Zoom sekmesinde "Önerileri temizle" ve "Önerileri oluştur" çalışır, elle zoom\'a dokunmaz', async () => {
+  if (editing) await step('Otomatik zoom: Zoom sekmesinde "Önerileri temizle" ve "Önerileri oluştur" çalışır, elle zoom\'a dokunmaz', async () => {
     click(option(t("Ayar grubu"), t("Zoom")), 'Zoom sekmesi');
     const before = autoZooms();
     click(await until(() => button(t("Önerileri temizle")), 3000), 'Önerileri temizle');
@@ -155,6 +162,13 @@ export async function runUiTest(): Promise<unknown> {
   let ext: 'mp4' | 'webm' = PROFILE.defaultExport;
   /** Set when this device cannot write MP4 (no H.264 hardware encoder): the window's message. */
   let mp4Unavailable: string | null = null;
+  let route = 'webcodecs';
+  let encoderLine = '';
+  let exportStart = 0;
+  let cpuBefore = await cpuNow();
+  /** Numbers of the first export (CI summary): route, speed, file and picture quality. */
+  let exportFacts: Record<string, unknown> | null = null;
+  let firstFolder = '';
   const exportedUrl = (n = 1) => mediaUrl(fileBase(), `exports/Arayüz testi 16x9${n > 1 ? ` (${n})` : ''}.${ext}`);
   /** The system's own decoders on an MP4 (WebM is not a QuickTime format; Chromium checks those). */
   const systemProbe = async (path: string): Promise<AvCheck | null> => {
@@ -178,30 +192,39 @@ export async function runUiTest(): Promise<unknown> {
     expect(dialog, 'dışa aktarma penceresi açılmadı');
     click(option(t("Kare hızı"), t("30 fps"), dialog!), '30 fps');
     await frame();
-    // The window asks the device first: either the export can start, or it says why not.
+    // The window decides the route before anything starts (export/route.ts): hardware H.264,
+    // Windows' Media Foundation encoders ("Windows yazılım kodlayıcısı"), or WebM said plainly.
     const footer = () => q('.export-modal footer')!;
-    const decided = await until(() => q('.export-unsupported', dialog!) ?? button(t("Dışa aktar"), footer()), 10_000);
-    expect(decided, 'pencere biçimin desteklenip desteklenmediğini söylemedi');
-    if (decided!.classList.contains('export-unsupported')) {
-      expect(ext === 'mp4', `${ext.toUpperCase()} için kodlayıcı yok: ${text(decided)}`);
-      mp4Unavailable = text(decided);
-      const disabled = all<HTMLButtonElement>('button', footer()).find((b) => text(b) === t("Dışa aktar"));
-      expect(disabled?.disabled, 'kodlayıcı yokken "Dışa aktar" düğmesi basılabilir');
-      expect(/H\.264/.test(mp4Unavailable), `uyarı H.264 kodlayıcısından söz etmiyor: "${mp4Unavailable}"`);
-      click(button(t("WebM’e geç"), decided!), '"WebM’e geç" düğmesi');
+    const decided = await until(() => q('.export-unsupported', dialog!) ?? (button(t("Dışa aktar"), footer()) && q('.export-encoder', dialog!)), 20_000);
+    expect(decided, 'pencere hangi kodlayıcıyla yazılacağını söylemedi');
+    expect(!decided!.classList.contains('export-unsupported'), `${ext.toUpperCase()} yazılamıyor: ${text(decided)}`);
+    encoderLine = text(q('.export-encoder', dialog!));
+    const fallback = q('.export-fallback', dialog!);
+    route = fallback ? 'webm-fallback' : /Windows/.test(encoderLine) ? 'mf' : 'webcodecs';
+    if (env.expectRoute) expect(route === env.expectRoute, `yol ${route}, beklenen ${env.expectRoute} · "${encoderLine}"${fallback ? ` · "${text(fallback)}"` : ''}`);
+    if (fallback) {
+      // WebM instead of MP4: the window says so, names the .webm file, and the export can start.
+      mp4Unavailable = text(fallback);
+      expect(ext === 'mp4', `${ext} için WebM bildirimi`);
+      expect(/WebM/.test(mp4Unavailable) && /\.webm/.test(mp4Unavailable), `bildirim WebM dosyasını söylemiyor: "${mp4Unavailable}"`);
       ext = 'webm';
-      expect(await until(() => text(q('.export-target-text strong')).endsWith('.webm'), 3000), 'WebM’e geçince kayıt yeri adı değişmedi');
-      await until(() => button(t("Dışa aktar"), footer()), 10_000);
+      expect(await until(() => text(q('.export-target-text strong')).endsWith('.webm'), 3000), 'kayıt yeri .webm değil');
     }
+    cpuBefore = await cpuNow();
+    exportStart = performance.now();
     click(button(t("Dışa aktar"), footer()), 'penceredeki Dışa aktar');
     expect(await until(() => q('.export-progress .bar') || q('.export-done') || q('.export-progress .is-error'), 10_000, 20), 'ilerleme çubuğu görünmedi');
     const end = await until(() => q('.export-done') ?? q('.export-progress .is-error'), 150_000, 50);
     expect(end, 'dışa aktarma 150 sn içinde bitmedi');
     expect(end!.classList.contains('export-done'), `hata: ${text(end)}`);
+    const seconds = (performance.now() - exportStart) / 1000;
+    const cpu = cpuPercent(cpuBefore, await cpuNow());
     expect(button(t("Klasörde göster"), dialog!), '"Klasörde göster" düğmesi yok');
+    if (mp4Unavailable) expect(q('.export-fallback-done'), 'bitişte "MP4 yerine WebM olarak kaydedildi" notu yok');
     const done = text(q('.export-done span'));
     expect(/MB/.test(done), `bitiş satırında dosya boyutu yok: "${done}"`);
     expect(donePath().endsWith(`/exports/Arayüz testi 16x9.${ext}`), `dosya yolu: "${donePath()}"`);
+    firstFolder = donePath().slice(0, donePath().lastIndexOf('/'));
     // An MP4 is judged by the system's decoders; Chromium's view is reported next to it. A WebM
     // (or an MP4 on a system without a probe) is judged by Chromium.
     const system = await systemProbe(donePath());
@@ -227,10 +250,33 @@ export async function runUiTest(): Promise<unknown> {
       expect(peak(sound) > 0.01, `ses sessiz (tepe ${peak(sound).toFixed(4)})`);
     }
     expect(soundSeconds > expected() - 0.05 && soundSeconds < expected() + 0.12, `ses ${soundSeconds.toFixed(2)} sn, zaman çizelgesi ${expected().toFixed(2)} sn`);
+    // What the file itself says (boxes) and how its picture compares with the frame it should show.
+    const bytes = new Uint8Array(await (await fetch(exportedUrl())).arrayBuffer());
+    const tracks = ext === 'mp4' ? mp4Tracks(bytes) : [];
+    const v = tracks.find((x) => x.handler === 'vide');
+    const a = tracks.find((x) => x.handler === 'soun');
+    const quality = chromium.ok ? await pictureQuality(store, exportedUrl(), expected() / 2).catch((e: Error) => ({ error: e.message })) : { error: 'Chromium bu dosyayı çözemiyor' };
+    exportFacts = {
+      route, encoder: encoderLine, format: ext, seconds: Math.round(seconds * 10) / 10, framesPerSecond: Math.round(((expected() * 30) / seconds) * 10) / 10, cpuPercent: Math.round(cpu),
+      bytes: bytes.length, fileKbps: Math.round((bytes.length * 8) / file.duration / 1000),
+      ...(v ? { video: { codec: v.codec, profile: avcProfileName(v.avcProfile), level: v.avcLevel, kbps: Math.round(v.kbps), frames: v.samples } } : {}),
+      ...(a ? { audio: { codec: a.codec, kbps: Math.round(a.kbps) } } : {}),
+      quality, ...(mp4Unavailable ? { fallback: mp4Unavailable } : {}),
+    };
+    if (route === 'mf') {
+      expect(v?.codec === 'avc1' && a?.codec === 'mp4a', `Media Foundation dosyası H.264 + AAC değil: ${tracks.map((x) => x.codec).join(', ')}`);
+      // bitrateFor: 1080p30 high quality is 12 Mbit/s; a software encoder may stay below it on simple pictures.
+      expect(v!.kbps > 2_000 && v!.kbps < 16_000, `görüntü bit hızı ${Math.round(v!.kbps)} kbit/sn (hedef 12 000)`);
+      expect(a!.kbps > 150 && a!.kbps < 230, `ses bit hızı ${Math.round(a!.kbps)} kbit/sn (hedef 192)`);
+    }
+    if ('psnr' in quality) {
+      expect(quality.psnr > 24, `çözülen kare beklenenden çok farklı (PSNR ${quality.psnr.toFixed(1)} dB)`);
+      expect(quality.sharpnessRatio > 0.5, `çözülen kare bulanık (keskinlik oranı ${quality.sharpnessRatio.toFixed(2)})`);
+    }
     const shot = await screenshot('disa-aktarma-bitti', 200);
     if (shot) shots.push(shot);
     const viewer = system ? ` · Chromium ${chromium.ok ? `da açtı (${chromium.width}×${chromium.height})` : 'açamadı (bu pakette çözücüsü yok)'}` : '';
-    return `${done}, ${file.duration.toFixed(2)} sn (çizelge ${expected().toFixed(2)}), ${file.width}×${file.height}, ses ${soundSeconds.toFixed(2)} sn · ${describe(system)}${viewer}${mp4Unavailable ? ` · MP4 yazılamadı, uyarı: "${mp4Unavailable}"` : ''}`;
+    return `${done}, ${file.duration.toFixed(2)} sn (çizelge ${expected().toFixed(2)}), ${file.width}×${file.height}, ses ${soundSeconds.toFixed(2)} sn · ${describe(system)}${viewer} · ${JSON.stringify(exportFacts)}`;
   });
 
   // Test runs never open the system save dialog: "Değiştir…" picks a temporary folder outside
@@ -267,6 +313,11 @@ export async function runUiTest(): Promise<unknown> {
     click(await until(() => button(t("İptal"), dialog!), 5000, 10), 'İptal');
     expect(await until(() => text(q('.export-progress')).includes(t("İptal edildi; yarım dosya silindi.")), 15_000, 50), `iptal mesajı yok: "${text(q('.export-progress'))}"`);
     expect(!(await probeVideo(exportedUrl(2))).ok, 'iptal edilen dosya diskte kaldı');
+    // The Media Foundation path writes "<name>.<random>.zeyvola-part.mp4" while it works.
+    if (firstFolder) {
+      const left = (await invoke<string[]>('smoke:listDir', { path: firstFolder })).filter((f) => /zeyvola-part|\.part$/i.test(f));
+      expect(left.length === 0, `iptalden sonra yarım dosya kaldı: ${left.join(', ')}`);
+    }
     if (chosenFolder) {
       const files = await invoke<string[]>('smoke:listDir', { path: chosenFolder });
       expect(files.length === 1 && files[0] === `Arayüz testi 16x9.${ext}`, `iptalden sonra seçilen klasörde: ${files.join(', ')}`);
@@ -279,7 +330,7 @@ export async function runUiTest(): Promise<unknown> {
     expect(await until(() => !q('.export-modal'), 2000), 'pencere kapanmadı');
   });
 
-  await step('Projelere dön: değişiklikler kaydedilir, proje listede küçük resmiyle durur', async () => {
+  if (editing) await step('Projelere dön: değişiklikler kaydedilir, proje listede küçük resmiyle durur', async () => {
     const saved = JSON.stringify([...store.project.zooms].sort((a, b) => a.start - b.start));
     click(button(t("Projelere dön")), 'Projelere dön');
     const card = await until(() => all('.project-card').find((c) => text(q('.project-meta strong', c)) === 'Arayüz testi'), 8000);
@@ -295,7 +346,7 @@ export async function runUiTest(): Promise<unknown> {
     return `${p.zooms.length} zoom kayıtlı`;
   });
 
-  await step('Sistem sondası kendini kanıtlar: eski sürümün VP9 + Opus\'lu MP4\'ünde "görüntü çözülemiyor" der', async () => {
+  if (editing) await step('Sistem sondası kendini kanıtlar: eski sürümün VP9 + Opus\'lu MP4\'ünde "görüntü çözülemiyor" der', async () => {
     if (PROFILE.defaultExport !== 'mp4') return 'WebM dağıtımı: atlandı';
     // What the published build wrote as "MP4" until 2026-11-13 (vp09 + Opus boxes).
     await invoke('smoke:writeFile', { projectId: sample.id, path: 'exports/eski-vp9.mp4', data: await oldStyleMp4() });
@@ -310,7 +361,7 @@ export async function runUiTest(): Promise<unknown> {
   // Only when asked (CI on Windows): macOS needs the screen recording permission, which a test
   // run never asks for.
   let realCapture: RealCapture | null = null;
-  if ((await invoke<{ realCapture: boolean }>('smoke:realRecording', { op: 'env' })).realCapture) {
+  if (editing && env.realCapture) {
     await step('Gerçek ekran kaydı (Chromium yolu): birkaç saniyelik kayıt dosyaları yazılır, görüntü boş değil, tıklamalar imleç günlüğünde', async () => {
       realCapture = await recordScreen(shots);
       return realCapture.summary;
@@ -327,7 +378,7 @@ export async function runUiTest(): Promise<unknown> {
     }
   }
 
-  return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST, ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
+  return { suite: 'ui', ok: checks.every((c) => c.ok), checks, shots, dist: DIST, ...(env.only ? { only: env.only } : {}), ...(exportFacts ? { exportFacts } : {}), ...(mp4Unavailable ? { mp4Unavailable } : {}), ...(realCapture ? { realCapture } : {}) };
 }
 
 interface AvCheck {
@@ -503,6 +554,7 @@ interface Bars { left: number; right: number; top: number; bottom: number }
 async function sideBars(src: string, at: number): Promise<Bars | null> {
   const v = document.createElement('video');
   v.muted = true;
+  v.crossOrigin = 'anonymous'; // the media protocol answers with CORS; without it the canvas is tainted
   v.src = src;
   const ok = await new Promise<boolean>((res) => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
   if (!ok) return null;
@@ -565,4 +617,43 @@ async function countFrames(src: string): Promise<number> {
   v.removeAttribute('src');
   v.load();
   return frames;
+}
+
+/**
+ * How close a decoded frame of an export is to the picture the editor draws for that moment
+ * (renderStill, the export's own compositor): PSNR and mean colour difference (a wrong RGB → YUV
+ * conversion shows as a colour shift), and how much fine detail (text edges) it keeps. Both at
+ * 960×540; the reference is a JPEG at quality 0.8, so a perfect export does not reach 99 dB.
+ */
+async function pictureQuality(store: EditorStore, url: string, at: number): Promise<{ psnr: number; meanDiff: [number, number, number]; sharpnessRatio: number; at: number }> {
+  const W = 960;
+  const H = 540;
+  const pixels = async (src: CanvasImageSource): Promise<Uint8ClampedArray> => {
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.drawImage(src, 0, 0, W, H);
+    return g.getImageData(0, 0, W, H).data;
+  };
+  const v = document.createElement('video');
+  v.muted = true;
+  v.crossOrigin = 'anonymous';
+  v.src = url;
+  await new Promise<void>((res, rej) => { v.onloadeddata = () => res(); v.onerror = () => rej(new Error('video açılmadı')); setTimeout(() => rej(new Error('zaman aşımı')), 8000); });
+  v.currentTime = at;
+  await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 5000); });
+  // The frame on screen starts at a multiple of 1/30 s; the reference is drawn for that moment.
+  const shown = Math.floor(v.currentTime * 30 + 1e-6) / 30;
+  const decoded = await pixels(v);
+  v.removeAttribute('src');
+  v.load();
+  const s = store.getState();
+  const jpeg = await renderStill(store.project, s.cursors, s.mediaBase, secondsToTicks(shown), 'v_16x9', { width: W, height: H });
+  const img = new Image();
+  img.src = jpeg;
+  await img.decode();
+  const reference = await pixels(img);
+  const { psnr, meanDiff } = compareFrames(decoded, reference);
+  const ref = sharpness(reference, W, H);
+  return { psnr: Math.round(psnr * 10) / 10, meanDiff: meanDiff.map((x) => Math.round(x * 10) / 10) as [number, number, number], sharpnessRatio: ref ? Math.round((sharpness(decoded, W, H) / ref) * 100) / 100 : 0, at: Math.round(shown * 1000) / 1000 };
 }

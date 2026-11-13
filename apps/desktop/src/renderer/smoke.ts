@@ -13,9 +13,9 @@ import { secondsToTicks } from '@zeyvola/timing';
 import { suggestZooms } from '@zeyvola/zoom-engine';
 import { api } from './api';
 import { t } from './i18n';
-import { checkExportSupport, pickVideoConfig, runExport } from './export/exporter';
+import { checkExportSupport, pickVideoConfig } from './export/exporter';
 import { synthesizeRecording } from './smoke-fixtures';
-import { createSampleProject, decodeSound, exportsRel, frame, mediaUrl, probeVideo, sleep, until, type Check } from './testing/harness';
+import { createSampleProject, decodeSound, exportsRel, frame, mediaUrl, probeVideo, routedExport, sleep, until, type Check } from './testing/harness';
 import { PATENT_POOL_CODECS, PROFILE } from '../shared/distribution';
 import { importVideo } from './screens/editor/import-media';
 import { warmUpCamera } from './capture-devices';
@@ -297,27 +297,45 @@ async function codecMatrix(): Promise<Record<string, string>> {
 const EXPORT_ORDER = ['mp4', 'webm'] as const;
 
 /**
- * Set when this device cannot write MP4 (no H.264 hardware encoder, or no AAC encoder): the message
- * the export window shows. The MP4 checks are then replaced by a check of that message, and the
- * export checks run with WebM, which every device writes.
+ * How this device writes MP4 (export/route.ts), asked before any MP4 check runs:
+ *   webCodecsH264  WebCodecs offers a hardware H.264 encoder (our own MP4 writer's round trip needs it)
+ *   mp4Route       the route the export window picks: webcodecs, mf (Windows' Media Foundation through
+ *                  the helper) or webm-fallback (WebM instead of MP4, said plainly)
+ *   mp4Missing     MP4 cannot be written at all (the window's message); MP4 exports are then skipped
+ * The export checks below go through routedExport, so they write what the window would write.
  */
+let webCodecsH264 = true;
+let mp4Route: string | null = null;
 let mp4Missing: string | null = null;
 const usableFormats = () => EXPORT_ORDER.filter((f) => PROFILE.formats.includes(f) && !(f === 'mp4' && mp4Missing));
+const roundTripFormats = () => usableFormats().filter((f) => f !== 'mp4' || webCodecsH264);
 const mainFormat = (): 'mp4' | 'webm' => (PROFILE.defaultExport === 'mp4' && mp4Missing ? 'webm' : PROFILE.defaultExport);
 
-/** Asks the encoders the way the export window does, before any MP4 check runs. */
 async function mp4Support(checks: Check[]): Promise<void> {
+  webCodecsH264 = await pickVideoConfig('mp4', 1920, 1080, 30, 10e6).then(() => true, () => false);
   const sample = await createSampleProject(2, 'MP4 desteği');
   const { project } = await loadProject(sample.id);
   const ask = (format: 'mp4' | 'webm') => checkExportSupport(project, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'high', includeAudio: true });
   const mp4 = await ask('mp4');
-  if (mp4.ok) return; // the export checks below write and check real MP4 files
+  if (mp4.ok) {
+    mp4Route = mp4.route.kind;
+    if (webCodecsH264 && mp4.route.kind === 'webcodecs') return; // the usual path; the exports below check it
+    const win = (await api.appInfo()).platform === 'win32';
+    // Without a hardware H.264 encoder: Windows' Media Foundation encoders, or WebM said plainly.
+    const ok = mp4.route.kind === 'mf' ? win && /Windows/.test(mp4.encoder) : mp4.route.kind === 'webm-fallback' && !!mp4.notice && mp4.written === 'webm';
+    checks.push({
+      name: 'MP4 yolu ekran kartı H.264 kodlayıcısı yokken: Windows\'ta Media Foundation yazılım kodlayıcısı, olmazsa açık bildirimle WebM',
+      ok,
+      detail: `WebCodecs donanım H.264 ${webCodecsH264 ? 'var' : 'yok'} · yol ${mp4.route.kind}${'reason' in mp4.route ? ` (${mp4.route.reason})` : ''} · kodlayıcı "${mp4.encoder}" · yazılacak ${mp4.written}${mp4.notice ? ` · not "${mp4.notice}"` : ''}`,
+    });
+    return;
+  }
   mp4Missing = mp4.message;
   const webm = await ask('webm');
   checks.push({
-    name: 'MP4 yazılamayan cihaz: dışa aktarma başlamadan söylenir, WebM önerilir, WebM yazılabilir',
-    ok: /H\.264|AAC/.test(mp4.message) && mp4.suggestWebm && webm.ok,
-    detail: `MP4: "${mp4.message}" · WebM önerisi ${mp4.suggestWebm ? 'var' : 'yok'} · WebM: ${webm.ok ? webm.encoder : webm.message} · bu cihazda MP4 dışa aktarma denetimleri atlandı`,
+    name: 'MP4 yazılamayan cihaz: dışa aktarma başlamadan söylenir, WebM yazılabilir',
+    ok: /H\.264|AAC/.test(mp4.message) && webm.ok,
+    detail: `MP4: "${mp4.message}" · WebM: ${webm.ok ? webm.encoder : webm.message} · bu cihazda MP4 dışa aktarma denetimleri atlandı`,
   });
 }
 /** Files from the round trips (picture + sound), reused as "videos from the computer". */
@@ -1057,7 +1075,7 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
   for (const format of usableFormats()) {
     const t1 = performance.now();
     const ctl = new AbortController();
-    const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
+    const result = await routedExport(store.project, store.getState().cursors, store.getState().mediaBase, {
       variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
     }, () => undefined, ctl.signal);
     const ms = performance.now() - t1;
@@ -1068,7 +1086,8 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
       const expected = sequenceDuration(store.project) / 705_600_000;
       // An MP4 is opened with the system's own decoders when the run has the probe (the packaged
       // app's Chromium has no AAC decoder); everything else with Chromium.
-      const sys = format === 'mp4' ? await window.zeyvola.invoke('smoke:avCheck', { path: result.path, duration: expected }) as SystemProbe : null;
+      const written = result.support?.ok ? result.support.written : format;
+      const sys = written === 'mp4' ? await window.zeyvola.invoke('smoke:avCheck', { path: result.path, duration: expected }) as SystemProbe : null;
       let seen: { duration: number; width: number; height: number; by: string };
       if (sys && !sys.skipped) {
         seen = { duration: sys.duration, width: Math.round(sys.video?.width ?? 0), height: Math.round(sys.video?.height ?? 0), by: sys.engine ?? 'sistem' };
@@ -1084,7 +1103,8 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
       ok = (!sys || sys.skipped || sys.ok) && Math.abs(seen.duration - expected) < 0.2 && seen.width === 1920 && seen.height === 1080;
       detail += `${result.encoder}, ${seen.by}: ${seen.width}×${seen.height}, ${seen.duration.toFixed(2)} sn (beklenen ${expected.toFixed(2)}), ${((result.bytes ?? 0) / 1024 / 1024).toFixed(1)} MB, ${(result.total / (ms / 1000)).toFixed(1)} kare/sn`;
     }
-    checks.push({ name: `Gerçek proje dışa aktarımı ${format.toUpperCase()} 1080p30 (zoom + kamera + gizleme + büyüteç + ses)`, ok, detail, ms });
+    const via = result.support?.ok && result.support.route.kind !== 'webcodecs' ? ` [yol ${result.support.route.kind}, yazılan ${result.support.written}]` : '';
+    checks.push({ name: `Gerçek proje dışa aktarımı ${format.toUpperCase()} 1080p30 (zoom + kamera + gizleme + büyüteç + ses)`, ok, detail: `${detail}${via}`, ms });
   }
 
   // Optional (ZEYVOLA_SMOKE_EXPORT_MATRIX=1): export time of the same project at 1080p/4K, 30/60 fps
@@ -1092,7 +1112,7 @@ async function endToEnd(checks: Check[], shots: string[]): Promise<void> {
   if ((await api.appInfo()).smokeExportMatrix) {
     for (const [resolution, fps] of [['1080', 30], ['1080', 60], ['2160', 30], ['2160', 60]] as const) {
       const t1 = performance.now();
-      const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
+      const result = await routedExport(store.project, store.getState().cursors, store.getState().mediaBase, {
         variantId: 'v_16x9', format: mainFormat(), resolution, fps, quality: 'high', includeAudio: true,
       }, () => undefined, new AbortController().signal);
       const sec = (performance.now() - t1) / 1000;
@@ -1202,7 +1222,7 @@ async function aacImport(store: EditorStore, checks: Check[]): Promise<void> {
     for (const s of q.sequence.segments) if (s.id !== seg.id) q = removeSegment(q, s.id);
     return q;
   });
-  const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
+  const result = await routedExport(store.project, store.getState().cursors, store.getState().mediaBase, {
     variantId: 'v_16x9', format: mainFormat(), resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
   }, () => undefined, new AbortController().signal);
   let exportOk = false;
@@ -1286,7 +1306,7 @@ async function realRecording(checks: Check[], shots: string[]): Promise<void> {
   void shots;
 
   const t1 = performance.now();
-  const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
+  const result = await routedExport(store.project, store.getState().cursors, store.getState().mediaBase, {
     variantId: 'v_16x9', format: usableFormats().includes('mp4') ? 'mp4' : 'webm', resolution: '1080', fps: 30, quality: 'high', includeAudio: true,
   }, () => undefined, new AbortController().signal);
   const ms = performance.now() - t1;
@@ -1367,7 +1387,7 @@ async function exportWithBadSource(checks: Check[]): Promise<void> {
       const { project, file } = await spoil(opened.project, sample.screenFile);
       const t0 = performance.now();
       const result = await Promise.race([
-        runExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'standard', includeAudio: true }, () => undefined, new AbortController().signal),
+        routedExport(project, {}, opened.mediaBase, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'standard', includeAudio: true }, () => undefined, new AbortController().signal),
         sleep(60_000).then(() => null),
       ]);
       const ms = performance.now() - t0;
@@ -1410,7 +1430,7 @@ async function exportContextLoss(checks: Check[]): Promise<void> {
       HTMLCanvasElement.prototype.getContext = patched as typeof original;
       let result;
       try {
-        result = await runExport(project, {}, mediaBase, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'standard', includeAudio: true }, (pr) => {
+        result = await routedExport(project, {}, mediaBase, { variantId: 'v_16x9', format, resolution: '1080', fps: 30, quality: 'standard', includeAudio: true }, (pr) => {
           if (pr.phase !== 'video' || pr.frame < 10 || losses >= total) return;
           lose(made[made.length - 1]);
           losses++;
@@ -1453,7 +1473,7 @@ export async function runSmokeTests(): Promise<unknown> {
   if (PROFILE.formats.includes('mp4')) {
     try { await mp4Support(checks); } catch (e) { checks.push({ name: 'MP4 desteği sorusu', ok: false, detail: (e as Error).message }); }
   }
-  for (const format of usableFormats()) await roundTrip(format, checks);
+  for (const format of roundTripFormats()) await roundTrip(format, checks);
   await licenseChecks(checks);
   zoomPerf(checks);
   const capabilities = await codecMatrix();
@@ -1484,7 +1504,7 @@ export async function runSmokeTests(): Promise<unknown> {
   try { await realRecording(checks, shots); } catch (e) { checks.push({ name: 'Gerçek kayıt akışı', ok: false, detail: (e as Error).stack ?? String(e) }); }
   await exportWithBadSource(checks);
   await exportContextLoss(checks);
-  return { ok: checks.every((c) => c.ok), gpu, checks, capabilities, shots, userAgent: navigator.userAgent, ...(mp4Missing ? { mp4Missing } : {}) };
+  return { ok: checks.every((c) => c.ok), gpu, checks, capabilities, shots, userAgent: navigator.userAgent, webCodecsH264, mp4Route, ...(mp4Missing ? { mp4Missing } : {}) };
 }
 
 /** What tests/media-check reports through smoke:avCheck (AVFoundation or Media Foundation). */

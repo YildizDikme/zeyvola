@@ -9,6 +9,7 @@ import { api } from '../api';
 import type { Player } from '../playback/player';
 import type { EditorStore } from '../state/editor-store';
 import { synthesizeRecording, type SyntheticRecording } from '../smoke-fixtures';
+import { checkExportSupport, runExport, type ExportProgress, type ExportSupport } from '../export/exporter';
 
 export interface Check { name: string; ok: boolean; detail?: string; ms?: number }
 
@@ -158,6 +159,22 @@ export function pressAt(el: HTMLElement | null, fx: number, fy: number, what: st
 }
 
 export const key = (k: string, init: KeyboardEventInit = {}): void => { window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...init })); };
+
+// ─── Exporting the way the export window does ─────────────────────────────────
+
+/**
+ * runExport with the route the export window would pick (checkExportSupport): hardware H.264,
+ * Windows' Media Foundation encoders through the helper, or WebM instead of MP4. A test that
+ * called runExport directly would always ask WebCodecs, which a machine without a hardware H.264
+ * encoder cannot do for MP4.
+ */
+export async function routedExport(...args: Parameters<typeof runExport>): Promise<ExportProgress & { support?: ExportSupport }> {
+  const [project, , , options] = args;
+  const support = await checkExportSupport(project, options);
+  if (!support.ok) return { phase: 'error', frame: 0, total: 0, rate: 0, etaSeconds: 0, message: support.message, support };
+  args[3] = { ...options, route: support.route };
+  return { ...(await runExport(...args)), support };
+}
 
 // ─── Checking written files ───────────────────────────────────────────────────
 

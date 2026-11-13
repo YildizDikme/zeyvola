@@ -1,8 +1,8 @@
 # Lisans envanteri (otomatik)
 
-Üretildi: 2026-11-13T03:47:28.123Z · `node tools/license-inventory.mjs`
+Üretildi: 2026-11-13T04:07:59.164Z · `node tools/license-inventory.mjs`
 
-Toplam 62 paket · izinli 60 · koşullu 2 · engel 0 · belirsiz 0
+Toplam 66 paket · izinli 63 · koşullu 3 · engel 0 · belirsiz 0
 
 Bu tablo paket meta verisine dayanır. Dağıtıma girecek bileşenlerin lisansı, yayın öncesi kullanılan sürümün LICENSE dosyasından ayrıca doğrulanır.
 
@@ -10,6 +10,7 @@ Koşullu lisanslı paketler ve dağıtım durumu (dağıtılan paketler: `tools/
 
 - lightningcss@1.33.0 (MPL-2.0): uygulamayla dağıtılmıyor (yalnızca geliştirme/derleme aracı); dağıtım olmadığı için lisansın yükümlülükleri doğmaz
 - lightningcss-darwin-arm64@1.33.0 (MPL-2.0): uygulamayla dağıtılmıyor (yalnızca geliştirme/derleme aracı); dağıtım olmadığı için lisansın yükümlülükleri doğmaz
+- lightningcss-win32-x64-msvc@1.33.0 (MPL-2.0): uygulamayla dağıtılmıyor (yalnızca geliştirme/derleme aracı); dağıtım olmadığı için lisansın yükümlülükleri doğmaz
 
 Platform sütunu dolu olanlar yalnızca o sistemde kurulan derleme araçlarıdır (esbuild, rolldown, TypeScript, lightningcss ikilileri; fsevents); uygulama paketine girmez. Her biri kendi sisteminde, kurulu paketin package.json ve lisans dosyasından kaydedildi: `docs/licenses/platform-packages.json` (lisans dosyasının adı, SHA-256 özeti, ilk satırı, kaydedildiği sistem).
 
@@ -18,11 +19,13 @@ Platform sütunu dolu olanlar yalnızca o sistemde kurulan derleme araçlarıdı
 | @electron-internal/extract-zip | 1.0.5 | BSD-2-Clause | yok | dolaylı | izinli | — |
 | @electron/get | 5.1.0 | MIT | var | dolaylı | izinli | — |
 | @esbuild/darwin-arm64 | 0.28.2 | MIT | yok | dolaylı | izinli | darwin/arm64 |
+| @esbuild/win32-x64 | 0.28.2 | MIT | yok | dolaylı | izinli | win32/x64 |
 | @jridgewell/resolve-uri | 3.1.2 | MIT | var | dolaylı | izinli | — |
 | @jridgewell/sourcemap-codec | 1.6.0 | MIT | var | dolaylı | izinli | — |
 | @jridgewell/trace-mapping | 0.3.31 | MIT | var | dolaylı | izinli | — |
 | @oxc-project/types | 0.154.0 | MIT | var | dolaylı | izinli | — |
 | @rolldown/binding-darwin-arm64 | 1.2.14 | MIT | yok | dolaylı | izinli | darwin/arm64 |
+| @rolldown/binding-win32-x64-msvc | 1.2.14 | MIT | yok | dolaylı | izinli | win32/x64 |
 | @rolldown/pluginutils | 1.0.1 | MIT | var | dolaylı | izinli | — |
 | @types/chai | 5.2.3 | MIT | var | dolaylı | izinli | — |
 | @types/deep-eql | 4.0.2 | MIT | var | dolaylı | izinli | — |
@@ -32,6 +35,7 @@ Platform sütunu dolu olanlar yalnızca o sistemde kurulan derleme araçlarıdı
 | @types/react | 19.3.0 | MIT | var | geliştirme | izinli | — |
 | @types/react-dom | 19.3.0 | MIT | var | geliştirme | izinli | — |
 | @typescript/typescript-darwin-arm64 | 7.0.2 | Apache-2.0 | var | dolaylı | izinli | darwin/arm64 |
+| @typescript/typescript-win32-x64 | 7.0.2 | Apache-2.0 | var | dolaylı | izinli | win32/x64 |
 | @vitest/mocker | 5.0.5 | MIT | var | dolaylı | izinli | — |
 | @vitest/spy | 5.0.5 | MIT | var | dolaylı | izinli | — |
 | assertion-error | 2.0.1 | MIT | var | dolaylı | izinli | — |
@@ -50,6 +54,7 @@ Platform sütunu dolu olanlar yalnızca o sistemde kurulan derleme araçlarıdı
 | graceful-fs | 4.2.11 | ISC | var | dolaylı | izinli | — |
 | lightningcss | 1.33.0 | MPL-2.0 | var | dolaylı | koşullu | — |
 | lightningcss-darwin-arm64 | 1.33.0 | MPL-2.0 | var | dolaylı | koşullu | darwin/arm64 |
+| lightningcss-win32-x64-msvc | 1.33.0 | MPL-2.0 | var | dolaylı | koşullu | win32/x64 |
 | magic-string | 1.4.3 | MIT | var | dolaylı | izinli | — |
 | ms | 2.1.3 | MIT | var | dolaylı | izinli | — |
 | nanoid | 3.3.20 | MIT | var | dolaylı | izinli | — |

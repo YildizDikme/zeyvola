@@ -9,6 +9,16 @@
   "licenseFirstLine": null,
   "recordedOn": "darwin-arm64"
  },
+ "@esbuild/win32-x64@0.28.2": {
+  "name": "@esbuild/win32-x64",
+  "version": "0.28.2",
+  "platform": "win32/x64",
+  "license": "MIT",
+  "licenseFile": null,
+  "licenseSha256": null,
+  "licenseFirstLine": null,
+  "recordedOn": "win32-x64"
+ },
  "@rolldown/binding-darwin-arm64@1.2.14": {
   "name": "@rolldown/binding-darwin-arm64",
   "version": "1.2.14",
@@ -19,6 +29,16 @@
   "licenseFirstLine": null,
   "recordedOn": "darwin-arm64"
  },
+ "@rolldown/binding-win32-x64-msvc@1.2.14": {
+  "name": "@rolldown/binding-win32-x64-msvc",
+  "version": "1.2.14",
+  "platform": "win32/x64",
+  "license": "MIT",
+  "licenseFile": null,
+  "licenseSha256": null,
+  "licenseFirstLine": null,
+  "recordedOn": "win32-x64"
+ },
  "@typescript/typescript-darwin-arm64@7.0.2": {
   "name": "@typescript/typescript-darwin-arm64",
   "version": "7.0.2",
@@ -28,6 +48,16 @@
   "licenseSha256": "a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61",
   "licenseFirstLine": "Apache License",
   "recordedOn": "darwin-arm64"
+ },
+ "@typescript/typescript-win32-x64@7.0.2": {
+  "name": "@typescript/typescript-win32-x64",
+  "version": "7.0.2",
+  "platform": "win32/x64",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "licenseSha256": "a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61",
+  "licenseFirstLine": "Apache License",
+  "recordedOn": "win32-x64"
  },
  "fsevents@2.3.3": {
   "name": "fsevents",
@@ -48,5 +78,15 @@
   "licenseSha256": "5eba353fe5076ac3432177f8ab1cf75e3afcd0584251e37c3bfead5f447d040e",
   "licenseFirstLine": "Mozilla Public License Version 2.0",
   "recordedOn": "darwin-arm64"
+ },
+ "lightningcss-win32-x64-msvc@1.33.0": {
+  "name": "lightningcss-win32-x64-msvc",
+  "version": "1.33.0",
+  "platform": "win32/x64",
+  "license": "MPL-2.0",
+  "licenseFile": "LICENSE",
+  "licenseSha256": "5eba353fe5076ac3432177f8ab1cf75e3afcd0584251e37c3bfead5f447d040e",
+  "licenseFirstLine": "Mozilla Public License Version 2.0",
+  "recordedOn": "win32-x64"
  }
 }

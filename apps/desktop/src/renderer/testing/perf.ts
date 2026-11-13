@@ -13,12 +13,12 @@ import { parseCursorLog, presetTransition, sequenceDuration, type CursorTrack } 
 import { TICKS_PER_SECOND, secondsToTicks } from '@zeyvola/timing';
 import { suggestZooms } from '@zeyvola/zoom-engine';
 import { PROFILE, DIST } from '../../shared/distribution';
-import { runExport, type ExportOptions } from '../export/exporter';
+import type { ExportOptions } from '../export/exporter';
 import { probe } from '../perf-probe';
 import { regenerateZoomSuggestions } from '../screens/editor/zoom-actions';
 import { recordLikeBrowser, synthesizeRecording } from '../smoke-fixtures';
 import { api } from '../api';
-import { cpuNow, cpuPercent, createSampleProject, exportsRel, frame, invoke, openInEditor, sleep, stats, until, type Check, type OpenEditor, type SampleProject } from './harness';
+import { cpuNow, cpuPercent, createSampleProject, exportsRel, frame, invoke, openInEditor, routedExport, sleep, stats, until, type Check, type OpenEditor, type SampleProject } from './harness';
 
 /** One measured number. `better` says which direction is an improvement, for comparisons. */
 export interface Metric { name: string; value: number; unit: string; better?: 'lower' | 'higher' }
@@ -226,7 +226,7 @@ async function exportScenario(ed: OpenEditor, label: string, o: Pick<ExportOptio
   probe.start();
   const c0 = await cpuNow();
   const t0 = performance.now();
-  const result = await runExport(store.project, store.getState().cursors, store.getState().mediaBase, {
+  const result = await routedExport(store.project, store.getState().cursors, store.getState().mediaBase, {
     variantId: 'v_16x9', quality: 'high', includeAudio: true, ...o,
   }, () => undefined, new AbortController().signal);
   const wall = (performance.now() - t0) / 1000;

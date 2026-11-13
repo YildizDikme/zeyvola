@@ -89,6 +89,22 @@ jobs:
         continue-on-error: true
         run: node apps/desktop/scripts/package.mjs --platform win32 --arch x64 --experimental-windows
 
+      # The helper's own encoder check, as the app runs it before an export (route 2).
+      - name: Yardımcı kodlama sondası / helper encode probe
+        id: helper_probe
+        if: steps.package.outcome == 'success'
+        continue-on-error: true
+        run: |
+          $exe = 'apps/desktop/out/mp4/win32-x64/resources/bin/zeyvola-win.exe'
+          $file = Join-Path $env:RUNNER_TEMP 'zeyvola-probe.mp4'
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          $out = & $exe --encode-probe $file 2>&1
+          $code = $LASTEXITCODE
+          $result = [ordered]@{ exitCode = $code; ms = $sw.ElapsedMilliseconds; output = @($out | ForEach-Object { "$_" }); fileLeft = (Test-Path $file) }
+          New-Item -ItemType Directory -Force -Path "$env:OUT" | Out-Null
+          $result | ConvertTo-Json -Depth 4 | Tee-Object -FilePath "$env:OUT\helper-encode-probe.json"
+          exit $code
+
       - name: Tür denetimi / typecheck
         id: typecheck
         continue-on-error: true
@@ -125,6 +141,8 @@ jobs:
           $clicker = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/real-capture-web/windows-clicks.ps1', '-SignalDir', $sig)
           $env:ZEYVOLA_TEST_REAL_CAPTURE = '1'
           $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
+          # No graphics card here: MP4 must go through Windows' Media Foundation encoders (route 2).
+          $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'mf'
           node apps/desktop/scripts/run-suite.mjs ui --no-build --out "$env:OUT\dev" --timeout 15
           $code = $LASTEXITCODE
           Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
@@ -137,7 +155,25 @@ jobs:
         continue-on-error: true
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows-terms/terms-flow.ps1 -Exe apps/desktop/node_modules/electron/dist/electron.exe -AppArg "$env:GITHUB_WORKSPACE\apps\desktop" -Out "$env:OUT\dev-terms"
 
-            # Saved after packaging, so the Windows Electron/FFmpeg zips are kept too, even when a later step fails.
+            # Route 2 unavailable: the development app without its helper (renamed for this step only) must
+      # write WebM instead of MP4 and say so (route 3). Export steps only.
+      - name: Dışa aktarma, yardımcı yok (geliştirme) / export without the helper (development)
+        id: dev_nohelper
+        continue-on-error: true
+        run: |
+          $helper = 'native/helper-windows/bin/zeyvola-win.exe'
+          if (Test-Path $helper) { Rename-Item $helper 'zeyvola-win.exe.off' }
+          try {
+            $env:ZEYVOLA_UITEST_ONLY = 'export'
+            $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'webm-fallback'
+            node apps/desktop/scripts/run-suite.mjs ui --no-build --out "$env:OUT\dev-nohelper" --timeout 10
+            $code = $LASTEXITCODE
+          } finally {
+            if (Test-Path "$helper.off") { Rename-Item "$helper.off" 'zeyvola-win.exe' }
+          }
+          exit $code
+
+      # Saved after packaging, so the Windows Electron/FFmpeg zips are kept too, even when a later step fails.
       - name: Electron önbelleğini kaydet / save Electron cache
         if: always() && steps.electron-cache.outputs.cache-hit != 'true'
         continue-on-error: true
@@ -162,11 +198,24 @@ jobs:
           $clicker = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tests/real-capture-web/windows-clicks.ps1', '-SignalDir', $sig)
           $env:ZEYVOLA_TEST_REAL_CAPTURE = '1'
           $env:ZEYVOLA_TEST_SIGNAL_DIR = $sig
+          $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'mf'
           node apps/desktop/scripts/run-suite.mjs ui --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged" --timeout 15
           $code = $LASTEXITCODE
           Stop-Process -Id $clicker.Id -Force -ErrorAction SilentlyContinue
           Copy-Item (Join-Path $sig 'clicks.json') "$env:OUT\packaged\uitest-clicks.json" -ErrorAction SilentlyContinue
           exit $code
+
+      # Route 3 forced in the package (ZEYVOLA_TEST_EXPORT_ROUTE=webm, test runs only): WebM instead of
+      # MP4, said before and after the export. Export steps only.
+      - name: Dışa aktarma, WebM zorla (paket) / export, WebM forced (packaged)
+        id: pkg_webm
+        if: env.PACKAGED == 'true' && steps.package.outcome == 'success'
+        continue-on-error: true
+        run: |
+          $env:ZEYVOLA_UITEST_ONLY = 'export'
+          $env:ZEYVOLA_TEST_EXPORT_ROUTE = 'webm'
+          $env:ZEYVOLA_TEST_EXPECT_ROUTE = 'webm-fallback'
+          node apps/desktop/scripts/run-suite.mjs ui --app apps/desktop/out/mp4/win32-x64 --out "$env:OUT\packaged-webm" --timeout 10
 
       - name: Şartlar ekranı (paket) / terms flow (packaged)
         id: pkg_terms
@@ -202,6 +251,9 @@ jobs:
             dev_terms=${{ steps.dev_terms.outcome }}
             zig=${{ steps.zig.outcome }}
             package=${{ steps.package.outcome }}
+            helper_probe=${{ steps.helper_probe.outcome }}
+            dev_nohelper=${{ steps.dev_nohelper.outcome }}
+            pkg_webm=${{ steps.pkg_webm.outcome }}
             pkg_smoke=${{ steps.pkg_smoke.outcome }}
             pkg_ui=${{ steps.pkg_ui.outcome }}
             pkg_terms=${{ steps.pkg_terms.outcome }}

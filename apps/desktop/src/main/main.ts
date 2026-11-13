@@ -469,7 +469,14 @@ function registerIpc(): void {
       | { op: 'signal' | 'readSignal'; name: string }
       | { op: 'keep'; projectId: string; path: string; as: string };
     const realCaptureOp = async (p: RealCaptureOp): Promise<unknown> => {
-      if (p.op === 'env') return { realCapture: process.env.ZEYVOLA_TEST_REAL_CAPTURE === '1', signals: !!signalDir };
+      // ZEYVOLA_UITEST_ONLY=export: the interface test runs only the export steps (CI's extra runs).
+      // ZEYVOLA_TEST_EXPECT_ROUTE: the export route this machine must pick (webcodecs | mf | webm-fallback).
+      if (p.op === 'env') {
+        return {
+          realCapture: process.env.ZEYVOLA_TEST_REAL_CAPTURE === '1', signals: !!signalDir,
+          only: process.env.ZEYVOLA_UITEST_ONLY ?? null, expectRoute: process.env.ZEYVOLA_TEST_EXPECT_ROUTE ?? null,
+        };
+      }
       if (p.op === 'signal') {
         if (!signalDir) return false;
         await writeFile(join(signalDir, signalName(p.name)), `${Date.now()}\n`);

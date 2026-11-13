@@ -30,6 +30,8 @@ for (const f of files.filter((x) => x.endsWith('-report.json'))) {
   for (const c of checks) say(`${c.ok ? '✓' : '✗'} ${c.name}${c.detail ? ` — ${String(c.detail).slice(0, 600)}` : ''}`);
   if (r.capabilities) { say('Yetenekler:'); for (const [k, v] of Object.entries(r.capabilities)) say(`  ${k}: ${v}`); }
   if (r.realCapture) say(`Gerçek kayıt: ${JSON.stringify(r.realCapture)}`);
+  if (r.exportFacts) say(`Dışa aktarma ölçüleri: ${JSON.stringify(r.exportFacts)}`);
+  if (r.mp4Route || r.webCodecsH264 !== undefined) say(`MP4 yolu: ${r.mp4Route ?? '?'}, WebCodecs donanım H.264: ${r.webCodecsH264}`);
   if (r.userAgent) say(`userAgent: ${r.userAgent}`);
   say();
 }
@@ -42,6 +44,7 @@ for (const f of files.filter((x) => x.endsWith('terms-flow.json'))) {
   say();
 }
 for (const f of files.filter((x) => /platform-packages-.*\.json$/.test(x))) say(`## ${relative(out, f)} (docs/licenses/platform-packages.json için)\n${readFileSync(f, 'utf8')}\n`);
+for (const f of files.filter((x) => x.endsWith('helper-encode-probe.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 for (const f of files.filter((x) => x.endsWith('uitest-clicks.json'))) say(`## ${relative(out, f)}\n${readFileSync(f, 'utf8')}\n`);
 
 const text = lines.join('\n');

@@ -70,7 +70,8 @@ export function createZip(folder, zip) {
 export async function artifact(spec) {
   const { downloadArtifact } = await getter();
   const { file: _file, ...d } = details(spec);
-  return downloadArtifact(d);
+  // The same folder cached() looks in (electron_config_cache, as electron/install.js uses it).
+  return downloadArtifact({ ...d, ...(process.env.electron_config_cache ? { cacheRoot: process.env.electron_config_cache } : {}) });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

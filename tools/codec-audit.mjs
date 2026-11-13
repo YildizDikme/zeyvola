@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -88,7 +88,8 @@ function binaries(dir, platform) {
       const magic = fd.length === 4 ? fd.readUInt32BE(0) : 0;
       const macho = [0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe].includes(magic);
       const pe = fd[0] === 0x4d && fd[1] === 0x5a;
-      if ((platform === 'darwin' && macho) || (platform === 'win32' && pe)) out.push(p.slice(dir.length + 1));
+      // Package-relative, always with '/', as the BINARY_NOTICES patterns are written.
+      if ((platform === 'darwin' && macho) || (platform === 'win32' && pe)) out.push(p.slice(dir.length + 1).split(sep).join('/'));
     }
   };
   walk(dir);

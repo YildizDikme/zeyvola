@@ -345,11 +345,10 @@ public static class ZeyvolaMf {
   /// `frames` frames of W x H NV12 at 30 fps (a moving bar) through the Sink Writer's default
   /// H.264 encoder: no attributes on the writer (so no hardware transforms are asked for), 2 Mbit/s
   /// per 640x360 (scaled by area), progressive, square pixels. Reports the time of the writes.
-  static Hashtable EncodeH264(string path, int W, int H, int frames) {
+  static Hashtable EncodeH264(string path, int W, int H, int FPS, int frames) {
     var r = new Hashtable();
     IntPtr writer = IntPtr.Zero, outType = IntPtr.Zero, inType = IntPtr.Zero;
-    const int FPS = 30;
-    int bitrate = (int)(2000000L * W * H / (640 * 360));
+    int bitrate = (int)Math.Min(int.MaxValue, 2000000L * W * H / (640 * 360) * FPS / 30);
     r["input"] = "NV12"; r["output"] = "H.264 (MFVideoFormat_H264) in MP4"; r["width"] = W; r["height"] = H; r["fps"] = FPS; r["frames"] = frames; r["bitrate"] = bitrate;
     r["writerAttributes"] = "none (MFCreateSinkWriterFromURL attributes = NULL)";
     var fill = new System.Diagnostics.Stopwatch(); var total = System.Diagnostics.Stopwatch.StartNew();
@@ -360,8 +359,8 @@ public static class ZeyvolaMf {
       SetGuid(outType, MF_MT_SUBTYPE, MFVideoFormat_H264);
       SetInt(outType, MF_MT_AVG_BITRATE, bitrate);
       SetInt(outType, MF_MT_INTERLACE_MODE, 2); // progressive
-      SetLong(outType, MF_MT_FRAME_SIZE, ((long)W << 32) | H);
-      SetLong(outType, MF_MT_FRAME_RATE, ((long)FPS << 32) | 1);
+      SetLong(outType, MF_MT_FRAME_SIZE, ((long)W << 32) | (long)(uint)H);
+      SetLong(outType, MF_MT_FRAME_RATE, ((long)FPS << 32) | 1L);
       SetLong(outType, MF_MT_PIXEL_ASPECT_RATIO, (1L << 32) | 1);
       int stream;
       Check(M<FnAddStream>(writer, W_AddStream)(writer, outType, out stream), "AddStream (H.264)");
@@ -369,8 +368,8 @@ public static class ZeyvolaMf {
       SetGuid(inType, MF_MT_MAJOR_TYPE, MFMediaType_Video);
       SetGuid(inType, MF_MT_SUBTYPE, MFVideoFormat_NV12);
       SetInt(inType, MF_MT_INTERLACE_MODE, 2);
-      SetLong(inType, MF_MT_FRAME_SIZE, ((long)W << 32) | H);
-      SetLong(inType, MF_MT_FRAME_RATE, ((long)FPS << 32) | 1);
+      SetLong(inType, MF_MT_FRAME_SIZE, ((long)W << 32) | (long)(uint)H);
+      SetLong(inType, MF_MT_FRAME_RATE, ((long)FPS << 32) | 1L);
       SetLong(inType, MF_MT_PIXEL_ASPECT_RATIO, (1L << 32) | 1);
       Check(M<FnSetInput>(writer, W_SetInputMediaType)(writer, stream, inType, IntPtr.Zero), "SetInputMediaType (NV12 -> H.264)");
       Check(M<FnSelf>(writer, W_BeginWriting)(writer), "BeginWriting");
@@ -417,9 +416,10 @@ public static class ZeyvolaMf {
     r["aacDecoders"] = Both(MFT_CATEGORY_AUDIO_DECODER, MFMediaType_Audio, MFAudioFormat_AAC, true);
     // A small one, and the app's export size (1080p30, 2 s).
     var tests = new List<Hashtable>();
-    foreach (int[] size in new int[][] { new int[] { 640, 360, 30 }, new int[] { 1920, 1080, 60 } }) {
-      string file = System.IO.Path.Combine(folder, string.Format("mf-h264-encode-test-{0}x{1}.mp4", size[0], size[1]));
-      var enc = EncodeH264(file, size[0], size[1], size[2]);
+    // width, height, fps, frames: a small one, the app's export size (1080p30, 2 s), and 4K60 (1 s).
+    foreach (int[] size in new int[][] { new int[] { 640, 360, 30, 30 }, new int[] { 1920, 1080, 30, 60 }, new int[] { 3840, 2160, 60, 60 } }) {
+      string file = System.IO.Path.Combine(folder, string.Format("mf-h264-encode-test-{0}x{1}p{2}.mp4", size[0], size[1], size[2]));
+      var enc = EncodeH264(file, size[0], size[1], size[2], size[3]);
       if ((bool)enc["ok"]) {
         enc["bytes"] = new System.IO.FileInfo(file).Length;
         enc["decodedBack"] = Probe(file);
@@ -427,7 +427,8 @@ public static class ZeyvolaMf {
       tests.Add(enc);
     }
     r["h264EncodeTest"] = tests[0];
-    r["h264EncodeTest1080p"] = tests[1];
+    r["h264EncodeTest1080p30"] = tests[1];
+    r["h264EncodeTest4K60"] = tests[2];
     return r;
   }
 }

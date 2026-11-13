@@ -74,11 +74,13 @@ function Buttons($dialog) {
   if ($cmd.Count) { return , $cmd }
   return , @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button })
 }
+# Invoke when the button offers it; the task dialog's command buttons (CCPushButton panes) may
+# not, then the button gets the keyboard focus through UI Automation and Space presses it.
+# (.NET Framework's UI Automation has no LegacyIAccessible pattern.)
 function Press($button) {
   $p = $null
   if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return 'UI Automation (Invoke)' }
-  if ($button.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$p)) { $p.DoDefaultAction(); return 'UI Automation (DoDefaultAction)' }
-  $button.SetFocus(); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait(' '); return 'odak + Bosluk'
+  $button.SetFocus(); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait(' '); return 'UI Automation odagi + Bosluk'
 }
 # The dialog's buttons, waited for (the window can appear before its contents).
 function WaitButtons($dialog) {
@@ -102,13 +104,19 @@ function PressByKeys($dialog, [string]$which) {
 function Answer($r, $dialog, [string]$which) {
   $btn = WaitButtons $dialog
   $r.buttons = @($btn | ForEach-Object { $_.Current.Name })
-  if ($btn.Count -ge 3) { $r.answeredBy = Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]; return }
+  if ($btn.Count -ge 3) {
+    $r.answeredBy = Press $btn[$(if ($which -eq 'decline') { 2 } else { 0 })]
+    # Still open after 5 s: answer with the keyboard instead (Escape / Shift+Tab, Space).
+    if (-not (WaitFor { if (-not (Dialog $script:CurrentExe)) { $true } } 5)) { PressByKeys $dialog $which; $r.answeredBy += ' -> klavye' }
+    return
+  }
   $r.tree = DumpTree $dialog
   $r.notes += "dugme bulunamadi ($($btn.Count)); klavyeyle yanitlandi"
   PressByKeys $dialog $which
   $r.answeredBy = 'klavye'
 }
 function Start-App([string]$exePath, [string]$th) {
+  $script:CurrentExe = $exePath
   $env:ZEYVOLA_TEST_HOME = $th
   $argList = @(); if ($AppArg) { $argList += '"' + $AppArg + '"' }
   if ($argList.Count) { Start-Process -FilePath $exePath -ArgumentList $argList -PassThru } else { Start-Process -FilePath $exePath -PassThru }

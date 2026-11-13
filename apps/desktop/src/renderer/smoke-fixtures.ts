@@ -131,9 +131,12 @@ async function encodeVideo(width: number, height: number, frames: number, draw: 
   // Like the recorders: the macOS helper writes H.264 with the OS (hardware) encoder, so the A and
   // B builds (both with H.264 through the OS) use H.264 in MP4; the VP8 build, which has no H.264
   // at all, records VP8 in WebM (Chromium's recorder).
+  // A machine without a hardware H.264 encoder (a Windows CI runner) gets VP9 in the same MP4
+  // container; only the hardware encoder is ever asked (never OpenH264).
   const vp8 = FIXTURE_MIME === 'video/webm';
-  const codec = PATENT_POOL_CODECS ? 'avc1.640028' : vp8 ? 'vp8' : 'vp09.00.41.08';
-  const video: Mp4VideoConfig = PATENT_POOL_CODECS ? { codec: 'avc1', width, height } : { codec: 'vp09', width, height, codecString: codec };
+  const h264 = PATENT_POOL_CODECS && !vp8 && (await VideoEncoder.isConfigSupported({ codec: 'avc1.640028', width, height, bitrate: 8e6, framerate: FPS, hardwareAcceleration: 'prefer-hardware' }).then((s) => !!s.supported, () => false));
+  const codec = h264 ? 'avc1.640028' : vp8 ? 'vp8' : 'vp09.00.41.08';
+  const video: Mp4VideoConfig = h264 ? { codec: 'avc1', width, height } : { codec: 'vp09', width, height, codecString: codec };
   const sink = async (d: Uint8Array, p: number | null) => { parts.push({ d: d.slice(), p }); };
   const w = vp8 ? new WebmWriter({ video: { codec: 'V_VP8', width, height }, sink }) : new Mp4Writer({ video, sink });
   let chain = Promise.resolve();
@@ -141,14 +144,14 @@ async function encodeVideo(width: number, height: number, frames: number, draw: 
     output: (c, meta) => {
       const d = new Uint8Array(c.byteLength);
       c.copyTo(d);
-      if (meta?.decoderConfig?.description && PATENT_POOL_CODECS) video.description = new Uint8Array(meta.decoderConfig.description as ArrayBuffer);
+      if (meta?.decoderConfig?.description && h264) video.description = new Uint8Array(meta.decoderConfig.description as ArrayBuffer);
       const ts = c.timestamp;
       const key = c.type === 'key';
       chain = chain.then(() => (w instanceof WebmWriter ? w.addVideo(d, ts, key) : w.addVideo(d, ts, 1e6 / FPS, key)));
     },
     error: (e) => { throw e; },
   });
-  enc.configure(PATENT_POOL_CODECS
+  enc.configure(h264
     ? { codec, width, height, bitrate: 8e6, framerate: FPS, avc: { format: 'avc' }, hardwareAcceleration: 'prefer-hardware' }
     : { codec, width, height, bitrate: 8e6, framerate: FPS });
   for (let i = 0; i < frames; i++) {
