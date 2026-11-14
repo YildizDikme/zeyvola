@@ -31,7 +31,7 @@ export const DEMO_GIF = 'demo';
 /** Width of the saved pictures in pixels (the window is 1440 points wide). */
 const SHOT_WIDTH = 1600;
 /** The demo: timeline seconds [start, end) at this size and frame rate. */
-const DEMO = { start: 0.3, end: 7.6, fps: 10, width: 720, height: 405 };
+const DEMO = { start: 0.3, end: 7.6, fps: 10, width: 720, height: 405, dither: 8 };
 
 const PROJECT_NAME: Record<FixtureLang, string> = { en: 'Account settings tour', tr: 'Hesap ayarları turu' };
 
@@ -101,7 +101,7 @@ export async function runDocShots(): Promise<unknown> {
       return `${name}${suffix}.png ${r!.width}×${r!.height}`;
     };
 
-    const sample = await createSampleProject(8, PROJECT_NAME[lang], (s) => synthesizeRecording(s, lang));
+    const sample = await createSampleProject(8, PROJECT_NAME[lang], (s) => synthesizeRecording(s, lang, 'character'));
     const name = PROJECT_NAME[lang];
 
     // The list shows a thumbnail once the editor has saved one, so the project is opened first.
@@ -264,12 +264,13 @@ export async function runDocShots(): Promise<unknown> {
     }
     const renderMs = performance.now() - t0;
 
-    const palette = medianCutPalette(frames, 255, 11);
-    const gif = new GifWriter({ width: DEMO.width, height: DEMO.height, palette, loop: 0 });
+    const palette = medianCutPalette(frames, 255, 5);
+    // Ordered dithering against banding in the backdrop's soft gradient (gif.ts).
+    const gif = new GifWriter({ width: DEMO.width, height: DEMO.height, palette, loop: 0, dither: DEMO.dither });
     const delay = Math.round(100 / DEMO.fps);
     frames.forEach((f, i) => gif.addFrame(f, i === frames.length - 1 ? 150 : delay));
     const bytes = gif.finish();
-    expect(bytes.length < 4 * 1024 * 1024, `GIF ${(bytes.length / 1024 / 1024).toFixed(1)} MB (sınır 4 MB)`);
+    expect(bytes.length < 1024 * 1024, `GIF ${(bytes.length / 1024 / 1024).toFixed(2)} MB (sınır 1 MB)`);
 
     // Read back with Chromium's decoder (WebCodecs ImageDecoder): frame count and pictures.
     const dec = new ImageDecoder({ data: bytes, type: 'image/gif' });
@@ -284,15 +285,27 @@ export async function runDocShots(): Promise<unknown> {
       const back = g.getImageData(0, 0, DEMO.width, DEMO.height).data;
       const src = frames[i]!;
       let sum = 0;
-      for (let k = 0; k < src.length; k += 4) sum += Math.abs(src[k]! - back[k]!) + Math.abs(src[k + 1]! - back[k + 1]!) + Math.abs(src[k + 2]! - back[k + 2]!);
-      worst = Math.max(worst, sum / (src.length / 4) / 3);
+      // Compared in 4×4 blocks: the dither pattern averages out there, as it does for the eye.
+      let blocks = 0;
+      for (let by = 0; by + 4 <= DEMO.height; by += 4) {
+        for (let bx = 0; bx + 4 <= DEMO.width; bx += 4) {
+          for (let c = 0; c < 3; c++) {
+            let a = 0;
+            let b = 0;
+            for (let y = by; y < by + 4; y++) for (let x = bx; x < bx + 4; x++) { const k = (y * DEMO.width + x) * 4 + c; a += src[k]!; b += back[k]!; }
+            sum += Math.abs(a - b) / 16;
+          }
+          blocks++;
+        }
+      }
+      worst = Math.max(worst, sum / blocks / 3);
     }
     dec.close();
     // A 255-colour palette without dithering stays within a few levels on average.
-    expect(worst < 6, `geri okunan kare ortalama ${worst.toFixed(1)} düzey farklı`);
+    expect(worst < 4, `geri okunan kare 4×4 blokta ortalama ${worst.toFixed(1)} düzey farklı`);
 
     const r = await invoke<{ file: string; bytes: number }>('smoke:saveShot', { name: DEMO_GIF, ext: 'gif', data: bytes });
     shots.push(r.file);
-    return `${DEMO_GIF}.gif ${DEMO.width}×${DEMO.height}, ${frames.length} kare, ${DEMO.fps} kare/sn, ${(bytes.length / 1024 / 1024).toFixed(2)} MB, ${palette.length} renk, ${zoomsInDemo.length} zoom; çizim ${(renderMs / 1000).toFixed(1)} sn; tarayıcıda geri okuma farkı ${worst.toFixed(2)}`;
+    return `${DEMO_GIF}.gif ${DEMO.width}×${DEMO.height}, ${frames.length} kare, ${DEMO.fps} kare/sn, ${(bytes.length / 1024 / 1024).toFixed(2)} MB, ${palette.length} renk, titreme ${DEMO.dither}, ${zoomsInDemo.length} zoom; çizim ${(renderMs / 1000).toFixed(1)} sn; tarayıcıda geri okuma farkı ${worst.toFixed(2)}`;
   }
 }

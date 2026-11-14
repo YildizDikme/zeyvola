@@ -155,6 +155,27 @@ describe('medianCutPalette / PaletteMapper', () => {
     expect(pal[m.index(255, 0, 0)]).toEqual([255, 0, 0]);
   });
 
+  it('dithers a gradient between two colours into a mix instead of one hard band', () => {
+    const pal: Rgb[] = [[40, 40, 120], [56, 56, 136]];
+    const w = 64;
+    // A ramp from the first colour to the second across the width.
+    const frame = rgba(w, 4, (x) => { const v = Math.round((x / (w - 1)) * 16); return [40 + v, 40 + v, 120 + v]; });
+    const m = new PaletteMapper(pal);
+    const plain = m.map(frame);
+    const dithered = m.mapDithered(frame, w, 16);
+    // Without dithering the row switches colour once; with it the middle third mixes both.
+    const switches = (row: Uint8Array) => row.slice(0, w).reduce((n, v, i, a) => n + (i > 0 && v !== a[i - 1] ? 1 : 0), 0);
+    expect(switches(plain)).toBe(1);
+    expect(switches(dithered)).toBeGreaterThan(4);
+    const middle = [...dithered.slice(w + 22, w + 42)];
+    expect(middle).toContain(0);
+    expect(middle).toContain(1);
+    // A flat palette colour stays itself, and the pattern depends only on the position.
+    const flat = rgba(8, 8, () => pal[0]!);
+    expect([...m.mapDithered(flat, 8, 8)].every((v) => v === 0)).toBe(true);
+    expect(m.mapDithered(frame, w, 16)).toEqual(dithered);
+  });
+
   it('never gives more than 255 colours, so index 255 stays free for transparency', () => {
     const frame = rgba(64, 64, (x, y) => [x * 4, y * 4, (x * y) & 255]);
     expect(medianCutPalette([frame], 255, 1).length).toBeLessThanOrEqual(255);

@@ -147,6 +147,170 @@ function drawCamera(g: CanvasRenderingContext2D, w: number, h: number, t: number
   g.beginPath(); g.ellipse(w / 2, h * 0.3 + bob, h * 0.18, h * 0.09, 0, Math.PI, 0); g.fill();
 }
 
+/**
+ * The README pictures' camera (pnpm docshots only; the tests keep drawCamera above): a made-up
+ * cartoon person with glasses on a soft violet backdrop matching the interface palette. Bold,
+ * simple shapes so the face still reads in a camera bubble of about 60–130 px. Moves only with
+ * `t` (a slow head bob, a blink every few seconds), so every run draws the same frames.
+ */
+function drawCharacter(g: CanvasRenderingContext2D, w: number, h: number, t: number): void {
+  const u = h / 720; // drawn for 720 px of height, scaled to the canvas
+  const cx = w / 2;
+  // Backdrop: ink-violet to a warm corner, with a soft light behind the head.
+  const bg = g.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, '#3a2c63');
+  bg.addColorStop(0.55, '#2a2142');
+  bg.addColorStop(1, '#4a2a3e');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, w, h);
+  const glow = g.createRadialGradient(cx - 60 * u, h * 0.36, 20 * u, cx, h * 0.42, h * 0.62);
+  glow.addColorStop(0, 'rgba(255, 168, 98, 0.30)');
+  glow.addColorStop(0.5, 'rgba(178, 124, 255, 0.16)');
+  glow.addColorStop(1, 'rgba(178, 124, 255, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, w, h);
+
+  const bob = Math.sin(t * 1.7) * 5 * u;
+  const tilt = Math.sin(t * 0.9) * 0.03;
+  const ink = '#2a1d2e';
+  const line = 9 * u;
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+
+  // Shoulders: a rounded sweater with a shirt collar.
+  const shoulderY = h * 0.78 + bob * 0.4;
+  g.fillStyle = '#ff8f4a';
+  g.strokeStyle = ink;
+  g.lineWidth = line;
+  g.beginPath();
+  g.moveTo(cx - 300 * u, h + 20 * u);
+  g.bezierCurveTo(cx - 300 * u, shoulderY - 10 * u, cx - 220 * u, shoulderY - 70 * u, cx - 110 * u, shoulderY - 80 * u);
+  g.lineTo(cx + 110 * u, shoulderY - 80 * u);
+  g.bezierCurveTo(cx + 220 * u, shoulderY - 70 * u, cx + 300 * u, shoulderY - 10 * u, cx + 300 * u, h + 20 * u);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  // Neck.
+  g.fillStyle = '#e3a882';
+  g.beginPath();
+  g.roundRect(cx - 48 * u, shoulderY - 150 * u, 96 * u, 90 * u, 30 * u);
+  g.fill();
+  g.stroke();
+  // Collar points.
+  g.fillStyle = '#f7f4fb';
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(cx, shoulderY - 62 * u);
+    g.lineTo(cx + side * 78 * u, shoulderY - 84 * u);
+    g.lineTo(cx + side * 58 * u, shoulderY - 18 * u);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  }
+
+  // Head, ears, hair, face: turned slightly with the bob.
+  g.save();
+  g.translate(cx, h * 0.44 + bob);
+  g.rotate(tilt);
+  const R = 150 * u; // head radius
+  g.fillStyle = '#f2c4a0';
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(side * R * 0.98, 12 * u, 26 * u, 36 * u, 0, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+  }
+  g.beginPath();
+  g.ellipse(0, 0, R * 0.95, R * 1.08, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  // Hair: a rounded cap with a side sweep over the forehead.
+  g.fillStyle = '#4a2f2a';
+  g.beginPath();
+  g.moveTo(-R * 0.98, 10 * u);
+  g.bezierCurveTo(-R * 1.08, -R * 1.05, R * 0.4, -R * 1.45, R * 0.98, -R * 0.35);
+  g.bezierCurveTo(R * 1.02, -R * 0.1, R * 0.95, 0, R * 0.9, 6 * u);
+  g.bezierCurveTo(R * 0.75, -R * 0.45, R * 0.3, -R * 0.62, -R * 0.12, -R * 0.55);
+  g.bezierCurveTo(-R * 0.45, -R * 0.5, -R * 0.7, -R * 0.3, -R * 0.98, 10 * u);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  // Cheeks.
+  g.fillStyle = 'rgba(255, 120, 120, 0.28)';
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(side * R * 0.55, R * 0.38, 26 * u, 16 * u, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Eyes, blinking for 0.14 s every 3.3 s.
+  const blink = (t % 3.3) > 3.16 ? 0.12 : 1;
+  const eyeY = R * 0.06;
+  g.fillStyle = ink;
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(side * R * 0.38, eyeY, 13 * u, 16 * u * blink, 0, 0, Math.PI * 2);
+    g.fill();
+    if (blink === 1) {
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(side * R * 0.38 + 4 * u, eyeY - 6 * u, 4.5 * u, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = ink;
+    }
+  }
+  // Eyebrows.
+  g.lineWidth = 8 * u;
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.arc(side * R * 0.38, eyeY - 30 * u, 30 * u, Math.PI * 1.2, Math.PI * 1.8);
+    g.stroke();
+  }
+  // Glasses: two rounded frames with a bridge and a light reflection.
+  g.lineWidth = 11 * u;
+  g.strokeStyle = '#231a33';
+  for (const side of [-1, 1]) {
+    const lx = side * R * 0.38;
+    g.fillStyle = 'rgba(214, 226, 255, 0.18)';
+    g.beginPath();
+    g.roundRect(lx - 56 * u, eyeY - 44 * u, 112 * u, 86 * u, 30 * u);
+    g.fill();
+    g.stroke();
+    g.save();
+    g.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    g.lineWidth = 6 * u;
+    g.beginPath();
+    g.moveTo(lx + 18 * u, eyeY - 30 * u);
+    g.lineTo(lx + 36 * u, eyeY - 12 * u);
+    g.stroke();
+    g.restore();
+  }
+  g.beginPath();
+  g.moveTo(-R * 0.38 + 56 * u, eyeY - 6 * u);
+  g.quadraticCurveTo(0, eyeY - 20 * u, R * 0.38 - 56 * u, eyeY - 6 * u);
+  g.stroke();
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(side * (R * 0.38 + 56 * u), eyeY - 10 * u);
+    g.lineTo(side * R * 0.93, eyeY - 18 * u);
+    g.stroke();
+  }
+  // Nose and a gentle smile.
+  g.strokeStyle = ink;
+  g.lineWidth = 7 * u;
+  g.beginPath();
+  g.moveTo(-4 * u, R * 0.2);
+  g.quadraticCurveTo(10 * u, R * 0.32, -8 * u, R * 0.36);
+  g.stroke();
+  g.lineWidth = 9 * u;
+  g.beginPath();
+  g.arc(0, R * 0.42, 46 * u, Math.PI * 0.18, Math.PI * 0.82);
+  g.stroke();
+  g.restore();
+}
+
+/** Which camera picture a sample recording carries: the tests' plain one or the README character. */
+export type FixtureCamera = 'plain' | 'character';
+
 async function encodeVideo(width: number, height: number, frames: number, draw: (g: CanvasRenderingContext2D, t: number) => void): Promise<Uint8Array> {
   const canvas = new OffscreenCanvas(width, height);
   const g = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
@@ -249,15 +413,16 @@ function cursorLogFor(seconds: number): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function synthesizeRecording(seconds = 8, lang: FixtureLang = 'tr'): Promise<SyntheticRecording> {
+export async function synthesizeRecording(seconds = 8, lang: FixtureLang = 'tr', look: FixtureCamera = 'plain'): Promise<SyntheticRecording> {
+  const camera = look === 'character' ? drawCharacter : drawCamera;
   const frames = Math.round(seconds * FPS);
-  const [screen, camera, mic] = await Promise.all([
+  const [screen, cameraFile, mic] = await Promise.all([
     encodeVideo(W, H, frames, (g, t) => drawScreen(g, t, lang)),
-    encodeVideo(1280, 720, frames, (g, t) => drawCamera(g, 1280, 720, t)),
+    encodeVideo(1280, 720, frames, (g, t) => camera(g, 1280, 720, t)),
     encodeTone(seconds),
   ]);
   return {
-    screen, camera, videoMime: FIXTURE_MIME, mic, cursorLog: cursorLogFor(seconds), durationMs: seconds * 1000,
+    screen, camera: cameraFile, videoMime: FIXTURE_MIME, mic, cursorLog: cursorLogFor(seconds), durationMs: seconds * 1000,
     screenSize: { width: W, height: H }, cameraSize: { width: 1280, height: 720 },
     secretRegion: { x: 336 / W, y: 344 / H, w: 688 / W, h: 62 / H },
   };

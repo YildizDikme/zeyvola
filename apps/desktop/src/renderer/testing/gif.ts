@@ -6,7 +6,9 @@
  * tested in Node.
  *
  * Choices kept simple on purpose:
- *   - one global palette of up to 255 colours from a median cut over all frames, no dithering;
+ *   - one global palette of up to 255 colours from a median cut over all frames; optional
+ *     ordered (4×4 Bayer) dithering against banding in soft gradients. The pattern depends only
+ *     on the pixel's position, so a still area maps to the same indices in every frame;
  *     index 255 is the transparent colour of later frames;
  *   - each later frame stores only the rectangle that changed since the previous one, with
  *     unchanged pixels transparent ("do not dispose"), so still stretches cost a few bytes;
@@ -26,7 +28,7 @@ interface Box { pixels: Int32Array; lo: number; hi: number }
 
 /**
  * Median cut: splits the colour cube of the sampled pixels, always cutting the box with the
- * widest channel range at its median, until there are `max` boxes; each box's average colour
+ * largest channel range (in turns weighted by √pixels) at its median, until there are `max` boxes; each box's average colour
  * becomes one palette entry. `frames` are RGBA bytes; every `step`-th pixel is sampled.
  */
 export function medianCutPalette(frames: readonly Uint8ClampedArray[] | readonly Uint8Array[], max = 255, step = 7): Rgb[] {
@@ -55,7 +57,11 @@ export function medianCutPalette(frames: readonly Uint8ClampedArray[] | readonly
       const b = boxes[i]!;
       if (b.hi - b.lo < 2) continue;
       const [r, c] = range(b);
-      if (r > pickRange) { pickRange = r; pick = i; pickChannel = c; }
+      // Turns alternate: the widest box × √pixels (large soft areas such as a backdrop
+      // gradient get enough colours), then the widest box alone (small, distinct colours such
+      // as a face in a camera bubble are not merged into their surroundings).
+      const score = boxes.length % 2 ? r * Math.sqrt(b.hi - b.lo) : r;
+      if (r > 0 && score > pickRange) { pickRange = score; pick = i; pickChannel = c; }
     }
     if (pick < 0) break; // every box holds one colour
     const b = boxes[pick]!;
@@ -102,7 +108,27 @@ export class PaletteMapper {
     for (let i = 0, j = 0; j < out.length; i += 4, j++) out[j] = this.index(rgba[i]!, rgba[i + 1]!, rgba[i + 2]!);
     return out;
   }
+
+  /**
+   * Like `map`, with ordered dithering: each pixel is nudged by up to ±strength/2 levels by
+   * its place in a 4×4 Bayer matrix before the nearest colour is taken, so a gradient between
+   * two palette colours becomes a fine, even pattern instead of a hard band.
+   */
+  mapDithered(rgba: Uint8ClampedArray | Uint8Array, width: number, strength: number): Uint8Array {
+    const out = new Uint8Array(rgba.length >> 2);
+    const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
+    for (let j = 0, i = 0; j < out.length; j++, i += 4) {
+      const x = j % width;
+      const y = (j / width) | 0;
+      const d = (BAYER4[((y & 3) << 2) | (x & 3)]! / 16 - 0.46875) * strength;
+      out[j] = this.index(clamp(Math.round(rgba[i]! + d)), clamp(Math.round(rgba[i + 1]! + d)), clamp(Math.round(rgba[i + 2]! + d)));
+    }
+    return out;
+  }
 }
+
+/** The 4×4 ordered dither matrix (values 0…15). */
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5] as const;
 
 // ─── LZW (Appendix F) ─────────────────────────────────────────────────────────
 
@@ -197,6 +223,8 @@ export interface GifOptions {
   palette: readonly Rgb[];
   /** Times to play; 0 = forever. */
   loop?: number;
+  /** Ordered dithering strength in colour levels (about the palette's step); 0 or absent = none. */
+  dither?: number;
 }
 
 /** Writes an animated GIF frame by frame. Frames are RGBA bytes of the full picture. */
@@ -223,7 +251,7 @@ export class GifWriter {
   addFrame(rgba: Uint8ClampedArray | Uint8Array, delayCs: number): void {
     const { width: w, height: h } = this.o;
     if (rgba.length !== w * h * 4) throw new Error(`frame must be ${w}×${h} RGBA`);
-    const idx = this.mapper.map(rgba);
+    const idx = this.o.dither ? this.mapper.mapDithered(rgba, w, this.o.dither) : this.mapper.map(rgba);
     let x0 = 0; let y0 = 0; let x1 = w; let y1 = h;
     let data = idx;
     const prev = this.prev;
