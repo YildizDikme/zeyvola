@@ -1,8 +1,20 @@
-# Zeyvola
+<p align="center">
+  <img src="docs/readme/banner.svg" width="100%" alt="Zeyvola — Record once: zoom, frame and hide afterwards.">
+</p>
 
-**Record your screen, camera and microphone separately — then shape the video afterwards: automatic zoom from your clicks, privacy masks, camera layout and vertical formats, all on your own computer.**
+<p align="center">
+  <b>Record your screen, camera and microphone separately — then shape the video afterwards:<br>automatic zoom from your clicks, privacy masks, camera layout and vertical formats, all on your own computer.</b>
+</p>
 
-### Download Zeyvola 0.1.0
+<p align="center">
+  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg"><img src="docs/readme/download-mac-arm64.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with Apple silicon (.dmg)"></a>
+  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg"><img src="docs/readme/download-mac-intel.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with an Intel processor (.dmg)"></a>
+  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip"><img src="docs/readme/download-windows.svg" width="300" alt="Download Zeyvola 0.1.0 for Windows 10 and 11, 64-bit (.zip)"></a>
+</p>
+
+<p align="center">
+  <sub>Version 0.1.0 · macOS 13+ (Apple silicon and Intel) · Windows 10 / 11 (64-bit)</sub>
+</p>
 
 | Computer | Download |
 |---|---|
@@ -14,13 +26,16 @@ Which Mac? Apple menu › **About This Mac**: "Chip: Apple M…" → Apple silic
 
 All files, checksums and the FFmpeg source package: [Releases](https://github.com/YildizDikme/zeyvola/releases). The app is not code-signed yet, so the first launch needs one extra click — see *Install* below. · *Uygulama henüz kod imzalı değil; ilk açılışta bir ek adım gerekir, aşağıdaki* Kurulum *bölümüne bakın.*
 
-**[English](#english) · [Türkçe](#türkçe)**
+<p align="center"><b><a href="#english">English</a> · <a href="#türkçe">Türkçe</a></b></p>
 
-![Zeyvola's editor: zooms, lens and a privacy area on the timeline, camera bubble in the preview · Zeyvola düzenleyicisi: zaman çizelgesinde zoom'lar, büyüteç ve gizleme alanı, önizlemede kamera](docs/screenshots/kahraman.png)
+<p align="center">
+  <img src="docs/screenshots/kahraman.png" width="100%" alt="Zeyvola's editor: zooms, lens and a privacy area on the timeline, camera bubble in the preview">
+</p>
 
-![Automatic zoom following a click · Tıklamayı izleyen otomatik zoom](docs/screenshots/demo.gif)
-
-*Automatic zoom following a click · Tıklamayı izleyen otomatik zoom*
+<p align="center">
+  <img src="docs/screenshots/demo.gif" width="720" alt="Automatic zoom following a click">
+  <br><sub>Automatic zoom following a click · Tıklamayı izleyen otomatik zoom</sub>
+</p>
 
 | | |
 |---|---|
@@ -198,7 +213,15 @@ Bug reports and suggestions are welcome as [Issues](https://github.com/YildizDik
 
 ## Türkçe
 
-![Zeyvola düzenleyicisi Türkçe arayüzle: zoom'lar, büyüteç, gizleme alanı ve kamera](docs/screenshots/kahraman-tr.png)
+<p align="center">
+  <b>Ekranı, kamerayı ve mikrofonu ayrı kaydet — videoyu sonra şekillendir:<br>tıklamalardan otomatik zoom, gizleme alanları, kamera yerleşimi ve dikey formatlar; hepsi kendi bilgisayarında.</b>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/kahraman-tr.png" width="100%" alt="Zeyvola düzenleyicisi Türkçe arayüzle: zoom'lar, büyüteç, gizleme alanı ve kamera">
+</p>
+
+<p align="center"><sub>İndirme bağlantıları sayfanın en üstünde. · <a href="#english">English</a></sub></p>
 
 <details><summary>Türkçe arayüzden diğer görüntüler</summary>
 
