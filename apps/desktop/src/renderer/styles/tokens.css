@@ -1,50 +1,69 @@
-/* Zeyvola design tokens — neutral graphite surfaces, one vivid orange accent,
-   record red reserved for recording state. Palette chosen by the product owner. */
+/* Zeyvola design tokens — deep ink-violet surfaces with a glass layer, an orange → violet
+   accent used sparingly, record red reserved for recording state. */
 :root {
-  --bg-stage: #0e0e0f;
-  --bg-app: #161618;
-  --surface-1: #1a1a1c;
-  --surface-2: #222224;
-  --surface-3: #272729;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-soft: rgba(255, 255, 255, 0.055);
-  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --text: #f5f5f7;
-  --text-2: #96969d;
-  --text-3: #66666c;
+  --bg-stage: #0a0910;
+  --bg-app: #121019;
+  --surface-1: #18151f;
+  --surface-1-hi: #1e1a27;
+  --surface-2: #211d2b;
+  --surface-3: #2b2636;
+  --line: rgba(228, 216, 255, 0.10);
+  --line-soft: rgba(228, 216, 255, 0.062);
+  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --text: #f7f4fb;
+  --text-2: #aaa3b9;
+  --text-3: #817a90;
   --light: #f1f3f7;
   --white: #ffffff;
 
-  --accent: #ff940c;
-  --accent-hover: #ffa733;
-  --accent-press: #c96800;
-  --accent-deep: #ad5200;
-  --accent-ink: #191200;
-  --accent-soft: #3a2914;
-  --accent-glow: rgba(255, 148, 12, 0.28);
-  --accent-rgb: 255, 148, 12;
+  --accent: #ff8f2a;
+  --accent-hover: #ffa552;
+  --accent-press: #d96c10;
+  --accent-deep: #b25208;
+  --accent-ink: #1c0d06;
+  --accent-soft: #3a2420;
+  --accent-glow: rgba(255, 143, 42, 0.30);
+  --accent-rgb: 255, 143, 42;
+  --accent-2: #a77bff;
+  --accent-2-rgb: 167, 123, 255;
+  --accent-2-soft: #2a2142;
+  --accent-grad: linear-gradient(118deg, #ffa447 0%, #ff8152 46%, #b27cff 100%);
+  --accent-grad-hover: linear-gradient(118deg, #ffb565 0%, #ff9068 46%, #bf90ff 100%);
+  --accent-grad-press: linear-gradient(118deg, #e08a30 0%, #e06c42 46%, #9a66e8 100%);
+  --accent-grad-text: linear-gradient(100deg, #ffb062 0%, #ff8f6a 40%, #c49bff 100%);
+
+  /* Glass: translucent layers over the glow, a bright top edge, blur only on small fixed surfaces. */
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.062), rgba(255, 255, 255, 0.024));
+  --glass-bg-strong: linear-gradient(180deg, rgba(40, 34, 54, 0.92), rgba(24, 21, 33, 0.95));
+  --glass-border: rgba(232, 222, 255, 0.11);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.085);
+  --glass-blur: blur(18px) saturate(150%);
+  --app-glow:
+    radial-gradient(1100px 560px at 8% -10%, rgba(255, 143, 42, 0.12), transparent 62%),
+    radial-gradient(980px 640px at 96% 0%, rgba(150, 96, 255, 0.15), transparent 64%),
+    radial-gradient(1200px 700px at 55% 125%, rgba(122, 76, 230, 0.10), transparent 62%);
 
   --record: #ff3c33;
   --record-soft: rgba(255, 60, 51, 0.16);
-  --success: #2dcb4e;
-  --success-soft: #0a2211;
-  --info: #0c79ff;
-  --info-soft: #0d1326;
-  --warning: #ffce00;
+  --success: #2fd06a;
+  --success-soft: #0b2416;
+  --info: #4a8dff;
+  --info-soft: #121733;
+  --warning: #ffcf2e;
   --danger: #ff3c33;
 
-  --track-screen: #0c79ff;
-  --track-screen-rgb: 12, 121, 255;
-  --track-camera: #2dcb4e;
-  --track-camera-rgb: 45, 203, 78;
-  --track-audio: #ffce00;
-  --track-audio-rgb: 255, 206, 0;
-  --track-zoom: #ff940c;
-  --track-zoom-rgb: 255, 148, 12;
+  --track-screen: #3d86ff;
+  --track-screen-rgb: 61, 134, 255;
+  --track-camera: #2fd06a;
+  --track-camera-rgb: 47, 208, 106;
+  --track-audio: #ffcf2e;
+  --track-audio-rgb: 255, 207, 46;
+  --track-zoom: #ff8f2a;
+  --track-zoom-rgb: 255, 143, 42;
   --track-privacy: #ff3c33;
   --track-privacy-rgb: 255, 60, 51;
-  --track-magnifier: #a67cff;
-  --track-magnifier-rgb: 166, 124, 255;
+  --track-magnifier: #c58cff;
+  --track-magnifier-rgb: 197, 140, 255;
   --track-overlay: #f1f3f7;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -77,9 +96,9 @@
   --t-med: 200ms;
   --t-slow: 320ms;
 
-  --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.28);
-  --focus: 0 0 0 2px var(--bg-app), 0 0 0 4px rgba(255, 148, 12, 0.7);
+  --shadow-pop: 0 24px 64px rgba(4, 2, 10, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 30px rgba(4, 2, 10, 0.32);
+  --focus: 0 0 0 2px var(--bg-app), 0 0 0 4px rgba(var(--accent-2-rgb), 0.85);
 
   color-scheme: dark;
 }

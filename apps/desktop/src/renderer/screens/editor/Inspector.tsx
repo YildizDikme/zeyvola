@@ -82,7 +82,7 @@ function ZoomTarget({ store, player, item }: { store: EditorStore; player: Playe
     const draw = () => {
       const ctx = c.getContext('2d');
       if (!ctx) return;
-      ctx.fillStyle = '#0f1012';
+      ctx.fillStyle = '#0a0910';
       ctx.fillRect(0, 0, c.width, c.height);
       if (v.readyState >= 2) ctx.drawImage(v, 0, 0, c.width, c.height);
     };
