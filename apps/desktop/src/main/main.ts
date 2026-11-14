@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -521,6 +521,26 @@ function registerIpc(): void {
       const file = join(shotsDir, `${name.replace(/[^a-z0-9-]/gi, '')}.png`);
       await writeFile(file, img.toPNG());
       return { file, width: img.getSize().width, height: img.getSize().height };
+    });
+    // README pictures (pnpm docshots) made in the renderer, such as the demo GIF: saved next to
+    // the window pictures. Fixed extensions and a plain name only.
+    ipcMain.handle('smoke:saveShot', async (_e, p: { name: string; ext: 'gif' | 'png'; data: Uint8Array }) => {
+      if (p.ext !== 'gif' && p.ext !== 'png') throw new Error('unsupported picture type');
+      await mkdir(shotsDir, { recursive: true });
+      const file = join(shotsDir, `${p.name.replace(/[^a-z0-9-]/gi, '')}.${p.ext}`);
+      await writeFile(file, p.data);
+      return { file, bytes: p.data.length };
+    });
+    // pnpm docshots only: the default export folder becomes "~/Movies/Zeyvola" inside the
+    // stand-in home folder run-suite.mjs gives the app (HOME = ZEYVOLA_DOCS_HOME, a temporary
+    // folder), so the export window shows a short, neutral place and no real path.
+    ipcMain.handle('smoke:docsExportFolder', async () => {
+      const home = process.env.ZEYVOLA_DOCS_HOME;
+      if (SUITE !== 'docs' || !home || homedir() !== home) return null;
+      const dir = join(home, 'Movies', 'Zeyvola');
+      await mkdir(dir, { recursive: true });
+      await setLastExportFolder(dir);
+      return displayFolder(dir);
     });
   }
 

@@ -1,4 +1,4 @@
-# Zeyvola Windows deneme listesi (Beta)
+# Zeyvola Windows deneme listesi
 
 Bu liste, Zeyvola'nın Windows sürümünü gerçek bir Windows 10 ya da 11 bilgisayarda denemek içindir. Teknik bilgi gerekmez. Her adımda **ne yapacağınız**, **ne görmeniz gerektiği** ve **olmadıysa neyi not alacağınız** yazıyor. Sonunda bize göndereceklerinizin listesi var.
 

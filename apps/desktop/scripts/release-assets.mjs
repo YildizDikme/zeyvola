@@ -10,8 +10,8 @@
 //
 // First runs `codec-audit --release` on the package; any failure or release blocker stops here.
 // --draft writes the files even when only release blockers remain (for review, never for publishing).
-// Windows is released as a beta (RELEASE-STATUS.json: channel "beta"): automated tests on GitHub's
-// Windows machine only, not yet tried on a real Windows 10/11 PC.
+// Windows: automated tests passed on GitHub's Windows machine, and the app was tried on a real
+// Windows PC (install and recording); not tried on every kind of hardware (RELEASE-STATUS.json: note).
 // Files: Zeyvola-<v>-macos-<arch>.zip and .dmg, or Zeyvola-<v>-windows-<arch>.zip (the app plus
 // README, RELEASE.txt, LICENSE, NOTICE and the third-party notices), the FFmpeg source bundle
 // (LGPL-2.1: offered from the same place as the binary), SHA256SUMS.txt and RELEASE-STATUS.json
@@ -31,7 +31,7 @@ const platform = arg('platform', 'darwin');
 const arch = arg('arch', platform === 'win32' ? 'x64' : process.arch);
 const windows = platform === 'win32';
 const draft = process.argv.includes('--draft');
-const BETA_NOTE = 'GitHub\'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi.';
+const WINDOWS_NOTE = 'Otomatik testler GitHub\'ın Windows makinesinde geçti; uygulama gerçek bir Windows bilgisayarda kurulup kayıt yapılarak denendi. Her donanımda denenmedi.';
 const { version, author, homepage } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
 const { createZip } = await import(pathToFileURL(join(root, 'tools', 'electron-artifacts.mjs')).href);
 // The released profile is A (package.mjs default since 2026-11-13).
@@ -74,7 +74,7 @@ writeFileSync(join(folder, 'RELEASE.txt'), [
   `Source: ${homepage}`,
   `Electron ${electronVersion} · FFmpeg without proprietary codecs (FFMPEG-LGPL.md)`,
   `Prepared: ${new Date().toISOString().slice(0, 10)}`,
-  windows ? 'Status: beta. Passed the automated tests on GitHub\'s Windows machine; not yet tried on a real Windows 10/11 PC.' : '',
+  windows ? 'Status: passed the automated tests on GitHub\'s Windows machine and was tried on a real Windows PC (install and recording); not tried on every kind of hardware.' : '',
 ].filter(Boolean).join('\n') + '\n');
 const extra = [['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'], ['FFMPEG-LGPL.md', 'FFMPEG-LGPL.md'], ['LICENSES.chromium.html', 'LICENSES.chromium.html'], ['electron-LICENSE.txt', 'LICENSE.electron.txt']];
 if (windows && existsSync(join(lic, 'MICROSOFT-D3DCOMPILER-TERMS.txt'))) extra.push(['MICROSOFT-D3DCOMPILER-TERMS.txt', 'MICROSOFT-D3DCOMPILER-TERMS.txt']);
@@ -111,7 +111,7 @@ const codesign = windows ? null : spawnSync('codesign', ['-dv', app], { encoding
 const statusFile = join(out, 'RELEASE-STATUS.json');
 const status = existsSync(statusFile) ? JSON.parse(readFileSync(statusFile, 'utf8')) : {};
 status[label] = {
-  zip: basename(zip), sha256: sha(zip), ...(dmg ? { dmg: basename(dmg), dmgSha256: sha(dmg) } : {}), draft, ...(windows ? { channel: 'beta', note: BETA_NOTE } : {}), preparedAt: new Date().toISOString(),
+  zip: basename(zip), sha256: sha(zip), ...(dmg ? { dmg: basename(dmg), dmgSha256: sha(dmg) } : {}), draft, ...(windows ? { note: WINDOWS_NOTE } : {}), preparedAt: new Date().toISOString(),
   signing: windows
     ? 'imzasız (Authenticode yok): Windows SmartScreen "Windows bilgisayarınızı korudu" uyarısı gösterir'
     : `${/Signature=adhoc/.test(codesign ?? '') ? 'geçici (ad-hoc) imza' : 'imza okunamadı'}; Developer ID ve noter onayı (notarization) yok: Gatekeeper ilk açılışta uyarır`,

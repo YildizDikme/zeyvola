@@ -55,7 +55,30 @@ function cursorAt(t: number): { x: number; y: number } {
   return { x: from.x, y: from.y };
 }
 
-function drawScreen(g: CanvasRenderingContext2D, t: number): void {
+/** Language of the made-up screen's text. Turkish for the tests; English for the README pictures. */
+export type FixtureLang = 'tr' | 'en';
+
+/** Every word drawn on the made-up screen. The layout is the same in both languages. */
+const TEXT: Record<FixtureLang, {
+  app: string; menu: string[]; title: string; teamTitle: string; subtitle: string;
+  fields: [string, string][]; toggle: string; save: string; saved: string; sync: string;
+}> = {
+  tr: {
+    app: 'Örnek Uygulama', menu: ['Genel bakış', 'Hesap', 'Bildirimler', 'Faturalar', 'Ekip', 'Entegrasyonlar'],
+    title: 'Hesap ayarları', teamTitle: 'Ekip', subtitle: 'Profil bilgilerinizi ve iletişim tercihlerinizi yönetin.',
+    fields: [['Ad soyad', 'Deniz Örnek'], ['Telefon', '0555 123 45 67'], ['E-posta', 'deniz@ornek.test']],
+    toggle: 'Haftalık özet e-postası', save: 'Değişiklikleri kaydet', saved: 'Kaydedildi ✓', sync: 'son eşitleme',
+  },
+  en: {
+    app: 'Example App', menu: ['Overview', 'Account', 'Notifications', 'Billing', 'Team', 'Integrations'],
+    title: 'Account settings', teamTitle: 'Team', subtitle: 'Manage your profile details and contact preferences.',
+    fields: [['Full name', 'Alex Example'], ['Phone', '(555) 010-0123'], ['Email', 'alex@example.test']],
+    toggle: 'Weekly summary email', save: 'Save changes', saved: 'Saved ✓', sync: 'last sync',
+  },
+};
+
+function drawScreen(g: CanvasRenderingContext2D, t: number, lang: FixtureLang = 'tr'): void {
+  const tx = TEXT[lang];
   g.fillStyle = '#f4f2ee';
   g.fillRect(0, 0, W, H);
   // Sidebar
@@ -63,8 +86,8 @@ function drawScreen(g: CanvasRenderingContext2D, t: number): void {
   g.fillRect(0, 0, 250, H);
   g.fillStyle = '#e8e4dc';
   g.font = '600 22px -apple-system, system-ui, sans-serif';
-  g.fillText('Örnek Uygulama', 28, 52);
-  const items = ['Genel bakış', 'Hesap', 'Bildirimler', 'Faturalar', 'Ekip', 'Entegrasyonlar'];
+  g.fillText(tx.app, 28, 52);
+  const items = tx.menu;
   items.forEach((label, i) => {
     const y = 110 + i * 46;
     const active = (t >= 6.6 && i === 4) || (t < 6.6 && i === 1);
@@ -76,15 +99,15 @@ function drawScreen(g: CanvasRenderingContext2D, t: number): void {
   // Header
   g.fillStyle = '#16181d';
   g.font = '650 34px -apple-system, system-ui, sans-serif';
-  g.fillText(t >= 6.6 ? 'Ekip' : 'Hesap ayarları', 300, 86);
+  g.fillText(t >= 6.6 ? tx.teamTitle : tx.title, 300, 86);
   g.fillStyle = '#6c6f78';
   g.font = '400 17px -apple-system, system-ui, sans-serif';
-  g.fillText('Profil bilgilerinizi ve iletişim tercihlerinizi yönetin.', 300, 118);
+  g.fillText(tx.subtitle, 300, 118);
   // Card
   g.fillStyle = '#ffffff';
   g.beginPath(); g.roundRect(300, 160, 1080, 560, 18); g.fill();
   g.strokeStyle = '#e4e0d8'; g.lineWidth = 1.5; g.stroke();
-  const fields: [string, string][] = [['Ad soyad', 'Deniz Örnek'], ['Telefon', '0555 123 45 67'], ['E-posta', 'deniz@ornek.test']];
+  const fields = tx.fields;
   fields.forEach(([label, value], i) => {
     const y = 230 + i * 104;
     g.fillStyle = '#6c6f78'; g.font = '500 15px -apple-system, system-ui, sans-serif'; g.fillText(label, 340, y);
@@ -94,7 +117,7 @@ function drawScreen(g: CanvasRenderingContext2D, t: number): void {
     g.fillStyle = '#16181d'; g.font = '500 21px -apple-system, system-ui, sans-serif'; g.fillText(value, 362, y + 50);
   });
   // Toggle row
-  g.fillStyle = '#16181d'; g.font = '500 18px -apple-system, system-ui, sans-serif'; g.fillText('Haftalık özet e-postası', 340, 590);
+  g.fillStyle = '#16181d'; g.font = '500 18px -apple-system, system-ui, sans-serif'; g.fillText(tx.toggle, 340, 590);
   g.fillStyle = '#c8862a'; g.beginPath(); g.roundRect(960, 568, 60, 32, 16); g.fill();
   g.fillStyle = '#fff'; g.beginPath(); g.arc(1004, 584, 12, 0, Math.PI * 2); g.fill();
   // Save button (pressed state after the click at 1.6 s)
@@ -103,10 +126,10 @@ function drawScreen(g: CanvasRenderingContext2D, t: number): void {
   g.fillStyle = pressed ? '#a8701f' : '#c8862a';
   g.beginPath(); g.roundRect(1060, 690, 240, 60, 14); g.fill();
   g.fillStyle = '#1a1406'; g.font = '650 20px -apple-system, system-ui, sans-serif';
-  g.fillText(saved ? 'Kaydedildi ✓' : 'Değişiklikleri kaydet', saved ? 1112 : 1080, 728);
+  g.fillText(saved ? tx.saved : tx.save, saved ? (lang === 'en' ? 1135 : 1112) : (lang === 'en' ? 1115 : 1080), 728);
   // Subtle live element so frames differ.
   g.fillStyle = '#9a9ca3'; g.font = '400 14px ui-monospace, monospace';
-  g.fillText(`son eşitleme ${(t * 1000).toFixed(0).padStart(5, '0')} ms`, 300, 860);
+  g.fillText(`${tx.sync} ${(t * 1000).toFixed(0).padStart(5, '0')} ms`, 300, 860);
 }
 
 function drawCamera(g: CanvasRenderingContext2D, w: number, h: number, t: number): void {
@@ -226,10 +249,10 @@ function cursorLogFor(seconds: number): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function synthesizeRecording(seconds = 8): Promise<SyntheticRecording> {
+export async function synthesizeRecording(seconds = 8, lang: FixtureLang = 'tr'): Promise<SyntheticRecording> {
   const frames = Math.round(seconds * FPS);
   const [screen, camera, mic] = await Promise.all([
-    encodeVideo(W, H, frames, drawScreen),
+    encodeVideo(W, H, frames, (g, t) => drawScreen(g, t, lang)),
     encodeVideo(1280, 720, frames, (g, t) => drawCamera(g, 1280, 720, t)),
     encodeTone(seconds),
   ]);

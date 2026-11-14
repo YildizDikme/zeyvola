@@ -123,7 +123,11 @@ async function runApp(file, extraEnv = {}) {
   return { code: exit, log: out, timedOut: stopped };
 }
 const t0 = Date.now();
-const first = await runApp(reportFile);
+// docs: the app gets a stand-in home folder inside the run's temporary folder, so the export
+// window's "Save to" line reads "~/Movies/Zeyvola" instead of a real or temporary path.
+const docsHome = suite === 'docs' ? join(work, 'home') : null;
+if (docsHome) mkdirSync(docsHome, { recursive: true });
+const first = await runApp(reportFile, docsHome ? { HOME: docsHome, ZEYVOLA_DOCS_HOME: docsHome } : {});
 const { code, timedOut } = first;
 let log = first.log;
 writeFileSync(logFile, log);
@@ -215,8 +219,23 @@ if (suite === 'perf') {
 if (suite === 'docs' && report.ok) {
   // Replace the published set as a whole, so a renamed picture leaves no stale file behind.
   mkdirSync(shotsOut, { recursive: true });
-  for (const f of readdirSync(shotsOut)) if (f.endsWith('.png')) rmSync(join(shotsOut, f));
-  for (const f of report.shots ?? []) copyFileSync(f, join(shotsOut, basename(f)));
+  for (const f of readdirSync(shotsOut)) if (/\.(png|gif)$/.test(f)) rmSync(join(shotsOut, f));
+  // PNGs keep only the picture: the window capture carries the display's colour profile (iCCP),
+  // which is not needed for a README picture and says something about the machine.
+  const pictureOnly = (png) => {
+    const keep = new Set(['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND']);
+    const parts = [png.subarray(0, 8)];
+    for (let p = 8; p < png.length;) {
+      const n = png.readUInt32BE(p);
+      if (keep.has(png.toString('latin1', p + 4, p + 8))) parts.push(png.subarray(p, p + 12 + n));
+      p += 12 + n;
+    }
+    return Buffer.concat(parts);
+  };
+  for (const f of report.shots ?? []) {
+    if (f.endsWith('.png')) writeFileSync(join(shotsOut, basename(f)), pictureOnly(readFileSync(f)));
+    else copyFileSync(f, join(shotsOut, basename(f)));
+  }
   console.log(`${(report.shots ?? []).length} görüntü → ${shown(shotsOut)}/`);
 }
 

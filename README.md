@@ -1,164 +1,318 @@
 # Zeyvola
 
-macOS ve Windows (Beta) için ekran kaydı ve video düzenleme uygulaması. Ekran, kamera, mikrofon ve sistem sesi ayrı izlere kaydedilir. Kayıttan sonra zaman çizelgesinde zoom, kamera yerleşimi, gizleme ve tema düzenlenir.
+**Record your screen, camera and microphone separately — then shape the video afterwards: automatic zoom from your clicks, privacy masks, camera layout and vertical formats, all on your own computer.**
 
-*Screen recording and video editing for macOS and Windows (beta). Screen, camera, microphone and system audio are recorded to separate tracks; zoom, camera layout, privacy masks and themes are edited afterwards on a timeline.*
+### Download Zeyvola 0.1.0
 
-> Sürüm 0.1, ilk genel sürüm: **macOS** (Apple Silicon ve Intel) ve **Windows 10/11 (Beta)**. Windows sürümü GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. Bilinen riskler: [Windows Beta](#windows-beta-bilinen-riskler--known-risks).
-> *Version 0.1, the first public release: **macOS** (Apple silicon and Intel) and **Windows 10/11 (beta)**. The Windows version: it passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet.*
->
-> macOS'ta kayıt, macOS kayıt yardımcısıyla (ScreenCaptureKit) yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Kayıt ekranında "Yedek" (tarayıcı) yöntemi seçilirse sistem sesi kaydedilmez ve imleç videoya gömülür.
-> *Recording uses the macOS recording helper (ScreenCaptureKit): system audio goes to its own track and the cursor is kept out of the video. With the "Fallback" (browser) method on the recording screen, system audio is not recorded and the cursor is part of the video.*
->
-> Windows'ta kayıt tarayıcı yoluyla yapılır: sistem sesi kaydedilebilir, imleç videoya gömülür.
-> *On Windows, recording goes through the browser engine: system audio can be recorded and the cursor is part of the video.*
+| Computer | Download |
+|---|---|
+| Mac with Apple silicon (M1, M2, M3, M4 …) | [**Zeyvola-0.1.0-macos-arm64.dmg**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg) |
+| Mac with an Intel processor | [**Zeyvola-0.1.0-macos-x64.dmg**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg) |
+| Windows 10 / 11 (64-bit) | [**Zeyvola-0.1.0-windows-x64.zip**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip) |
 
-## Özellikler / Features
-- Ekran, kamera, mikrofon ve sistem sesi kaydı (ayrı izler)
-- Tıklamalardan ve imleç hareketinden otomatik zoom önerileri; elle düzenlenebilir. Tıklamaları küçük bir yardımcı program (`native/input-macos`) bildirir; yalnızca fare tuşlarını ve kaydırmayı görür, klavyeyi okumaz, video ya da ses kaydetmez.
-- Zaman çizelgesi: kesme, bölme, video ekleme (MP4, MOV, WebM)
-- Gizleme: seçilen alanı buzlu cam, bulanıklık ya da piksel efektiyle kapatma. Dışa aktarılan her kare bu efektlerden geçer.
-- Büyüteç: zaman çizelgesinde seçilen aralıklarda imleci takip eden mercek; her aralığın boyutu ve yakınlaştırması ayrı ayarlanır. Gizlenen alanları açığa çıkarmaz.
-- Temalar, arka plan, kamera yerleşimi; 16:9, 9:16, 1:1, 4:5 formatları
-- Dışa aktarma: **MP4** (H.264 + AAC, işletim sisteminin kodlayıcısıyla) ve **WebM** (VP9 + Opus), 1080p veya 4K, 30 veya 60 fps; kaydedilecek klasörü ve adı siz seçersiniz
-- Türkçe ve İngilizce arayüz
+Which Mac? Apple menu › **About This Mac**: "Chip: Apple M…" → Apple silicon, "Processor: … Intel …" → Intel. · *Hangi Mac? Apple menüsü › **Bu Mac Hakkında**: "Çip: Apple M…" → Apple Silicon, "İşlemci: … Intel …" → Intel.*
 
-## Ekran görüntüleri / Screenshots
-Görüntüler uydurma bir örnek projeden (`pnpm docshots`) üretilir; gerçek bir ekran, kişi ya da kamera görüntüsü içermez.
+All files, checksums and the FFmpeg source package: [Releases](https://github.com/YildizDikme/zeyvola/releases). The app is not code-signed yet, so the first launch needs one extra click — see *Install* below. · *Uygulama henüz kod imzalı değil; ilk açılışta bir ek adım gerekir, aşağıdaki* Kurulum *bölümüne bakın.*
 
-*The pictures come from a made-up sample project (`pnpm docshots`); no real screen, person or camera picture is shown.*
+**[English](#english) · [Türkçe](#türkçe)**
 
-![Düzenleyici: zaman çizelgesinde otomatik zoom önerileri](docs/screenshots/duzenleyici.png)
-*Düzenleyici: otomatik zoom önerileri zaman çizelgesinde. · Editor: automatic zoom suggestions on the timeline.*
+![Zeyvola's editor: zooms, lens and a privacy area on the timeline, camera bubble in the preview · Zeyvola düzenleyicisi: zaman çizelgesinde zoom'lar, büyüteç ve gizleme alanı, önizlemede kamera](docs/screenshots/kahraman.png)
 
-![Gizleme alanı: telefon numarası buzlu camla kapatılmış](docs/screenshots/gizleme-alani.png)
-*Gizleme: seçilen alan buzlu camla kapatılır. · Privacy: the selected area is covered with frosted glass.*
+![Automatic zoom following a click · Tıklamayı izleyen otomatik zoom](docs/screenshots/demo.gif)
 
-![Dikey 9:16 format](docs/screenshots/dikey-9x16.png)
-*Aynı kayıt dikey (9:16) formatta. · The same recording in vertical (9:16) format.*
+*Automatic zoom following a click · Tıklamayı izleyen otomatik zoom*
 
-![Dışa aktarma penceresi ve gizlilik kontrolü](docs/screenshots/disa-aktarma.png)
-*Dışa aktarma: MP4 (H.264 + AAC) ya da WebM (VP9 + Opus) ve gizleme alanlarının sınır kareleri. · Export: MP4 (H.264 + AAC) or WebM (VP9 + Opus) with the edge frames of each privacy area.*
+| | |
+|---|---|
+| ![A zoom selected on the timeline · Zaman çizelgesinde seçili bir zoom](docs/screenshots/zoom-secili.png) | ![A privacy mask over a phone number · Telefon numarasının üstünde gizleme alanı](docs/screenshots/gizleme-alani.png) |
+| *Zoom: suggested from your clicks, adjustable by hand · Tıklamalardan önerilir, elle ayarlanır* | *Privacy: frosted glass over sensitive data · Hassas bilgi buzlu camla kapatılır* |
+| ![The same recording in 9:16 · Aynı kayıt 9:16 formatta](docs/screenshots/dikey-9x16.png) | ![Export with MP4 or WebM and a privacy check · MP4 ya da WebM ile dışa aktarma ve gizlilik kontrolü](docs/screenshots/disa-aktarma.png) |
+| *One recording, several formats · Tek kayıt, birçok format* | *Export: MP4 or WebM, with a privacy check · Gizlilik kontrolüyle dışa aktarma* |
 
-## Gizlilik / Privacy
-Kayıtlar, imleç verileri ve projeler yalnızca bilgisayarınızda kalır. Uygulama ağ isteği yapmaz ve telemetri göndermez. Tuş vuruşları kaydedilmez.
+<details><summary>More screenshots</summary>
 
-*Recordings, cursor data and projects stay on your computer. The app makes no network requests and sends no telemetry.*
+![The editor with automatic zoom suggestions](docs/screenshots/duzenleyici.png)
+*The editor: automatic zoom suggestions on the timeline.*
 
-## İndirme / Download
-Sürümler GitHub **Releases** sayfasında yayımlanır. Bilgisayarınıza uyan dosyayı indirin:
+![The projects screen](docs/screenshots/proje-listesi.png)
+*Projects and quick start: full screen, window or region.*
 
-*Releases are published on the GitHub **Releases** page. Download the file for your computer:*
+</details>
 
-| Bilgisayar / Computer | Dosya / File | Durum / Status |
-|---|---|---|
-| Apple Silicon Mac (M1, M2, M3, M4 …) | `Zeyvola-<sürüm>-macos-arm64.dmg` (ya da `.zip`) | Yayımlanır / Released |
-| Intel işlemcili Mac / Intel Mac | `Zeyvola-<sürüm>-macos-x64.dmg` (ya da `.zip`) | Yayımlanır / Released (aşağıdaki nota bakın / see the note below) |
-| Windows 10 / 11 (64 bit, x64) | `Zeyvola-<sürüm>-windows-x64.zip` | **Beta**: GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. / *It passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet.* |
+*Screenshots come from a made-up sample project; no real screen, person or camera picture is shown. · Görüntüler uydurma bir örnek projedendir; gerçek bir ekran, kişi ya da kamera görüntüsü içermez.*
 
-Her sürümde ayrıca FFmpeg kaynak kodu paketi (`zeyvola-ffmpeg-lgpl-source-electron-<sürüm>.tar.gz`, LGPL-2.1, bkz. *Üçüncü taraf yazılımlar*) ve `SHA256SUMS.txt` bulunur. Uygulamayı kullanmak için bunlara gerek yoktur.
+---
 
-*Each release also has the FFmpeg source package (LGPL-2.1, see* Third-party software*) and `SHA256SUMS.txt`; you do not need them to use the app.*
+## English
 
-**Mac'im hangisi? / Which Mac do I have?** Apple menüsü › **Bu Mac Hakkında**. "Çip: Apple M…" yazıyorsa Apple Silicon, "İşlemci: … Intel …" yazıyorsa Intel dosyasını indirin.
+### Why Zeyvola
+- **Record once, decide later.** Screen, camera, microphone and system audio are recorded as separate tracks. Camera position and shape, zoom, background and format are all chosen after recording, on a timeline.
+- **Zoom that follows your clicks.** Zeyvola suggests zooms from where you clicked and where the pointer rested. Keep them, move them, or draw your own; your own zooms are never overwritten.
+- **Privacy that holds.** Cover any area with frosted glass, blur, pixelation or an opaque box. Every exported frame goes through these effects, and the export window shows the first and last frame of each covered area so you can check them before saving.
+- **A lens for the details.** The lens (magnifier) follows the pointer in the ranges you choose, with its own size and zoom; it never reveals a covered area.
+- **One recording, many formats.** 16:9, 9:16, 1:1 and 4:5, each with its own framing, from the same project.
+- **Standard files.** Export **MP4** (H.264 + AAC, written by the operating system's own encoder; opens in the players built into macOS and Windows) or **WebM** (VP9 + Opus), at 1080p or 4K, 30 or 60 fps.
+- **Your recordings stay yours.** Projects and recordings stay on your computer. Zeyvola makes no network requests, sends no telemetry and never records keystrokes.
+- **Nothing lost to a crash.** If Zeyvola or its recorder stops during a recording, the recording is added back to its project the next time Zeyvola starts.
+- **Turkish and English interface.** It follows your computer's language on first launch; you can change it any time.
 
-*Apple menu › **About This Mac**: "Chip" followed by an Apple chip means Apple silicon; "Processor" followed by an Intel processor means an Intel Mac.*
+Also on the timeline: trim, split, add videos (MP4, MOV, WebM), markers during recording, pause and resume, camera moves over time, themes and backgrounds, undo and redo.
 
-**Intel Mac notu / Intel Mac note.** Intel paketi bir Apple Silicon Mac'te Rosetta 2 altında uygulamanın kendi testlerinin tamamından geçti; gerçek bir Intel Mac'te henüz denenmedi. Bir sorun görürseniz lütfen **Issues** üzerinden bildirin.
+### What's in 0.1.0
+- **macOS** (Apple silicon and Intel), macOS 13 Ventura or later. Recording uses Zeyvola's macOS recording helper: system audio goes to its own track and the pointer is kept out of the video. The Intel package passed all of the app's own tests under Rosetta 2 on an Apple silicon Mac; it has not been tried on Intel hardware yet.
+- **Windows 10 / 11** (64-bit). The automated tests passed on GitHub's Windows machine, and the app has been installed and used for recording on a real Windows PC. It has not been tried on every kind of hardware. On Windows, recording goes through the browser engine: system audio can be recorded and the pointer is part of the video.
 
-*The Intel package passed all of the app's own tests under Rosetta 2 on an Apple silicon Mac but has not been tried on real Intel hardware yet. If something goes wrong, please report it under **Issues**.*
+Something not working? Please open an [Issue](https://github.com/YildizDikme/zeyvola/issues).
 
-**`.dmg` mi `.zip` mi? / `.dmg` or `.zip`?** İkisi de aynı uygulamayı içerir. `.dmg` bir disk görüntüsüdür; açınca uygulamayı **Uygulamalar** klasörüne sürüklersiniz. `.zip` aynı uygulamayı lisans dosyalarıyla birlikte bir klasör olarak verir. Emin değilseniz `.dmg`'yi seçin.
+### Install
+**macOS**
+1. Open the `.dmg` and drag **Zeyvola** onto the **Applications** shortcut.
+2. Open Zeyvola from **Applications**. Because it is not signed with an Apple Developer ID, macOS blocks the first launch:
+   - **macOS 15 and later:** try to open it once and close the warning. Go to **System Settings › Privacy & Security**, click **Open Anyway** for Zeyvola in the **Security** section and enter your login password. Apple shows this button for about an hour after the attempt.
+   - **macOS 14 and earlier:** right-click (or Control-click) the app, choose **Open**, then **Open** again.
 
-*Both contain the same app. The `.dmg` is a disk image you open and drag the app from into **Applications**; the `.zip` gives the same app in a folder together with the license files. If unsure, pick the `.dmg`.*
+   This is needed on the first launch and may be needed again after downloading a new version.
 
-**İsteğe bağlı: dosyayı doğrulama / Optional: verify the download.** İndirilen dosyanın SHA-256 değerini `SHA256SUMS.txt` içindeki satırla karşılaştırın; aynı değilse dosyayı kullanmayın ve yeniden indirin.
+**Windows**
+1. Extract the `.zip` to a permanent folder (right-click › **Extract All**). Do not run the app from inside the zip.
+2. Open `Zeyvola\Zeyvola.exe`.
+3. Microsoft Defender SmartScreen may show **"Windows protected your PC"**: click **More info**, then **Run anyway**.
+4. On first launch Zeyvola asks you to accept Microsoft's terms for `d3dcompiler_47.dll`, a Microsoft graphics file included in the Windows version. The terms cover only that file and do not change Zeyvola's license. **Read the terms** opens the full text. After **I accept**, Zeyvola restarts once and does not ask again; after **I do not accept**, it quits and asks next time.
 
-*Compare the file's SHA-256 with its line in `SHA256SUMS.txt`; if they differ, do not use the file and download it again.*
+<details><summary><b>Windows notes</b></summary>
 
-```bash
-shasum -a 256 ~/Downloads/Zeyvola-<sürüm>-macos-arm64.dmg      # macOS (Terminal)
-```
+- **SmartScreen:** Zeyvola is not code-signed, so SmartScreen warns on first launch. Company policy may block **Run anyway**.
+- **Smart App Control:** If it is on in Windows 11 (Windows Security › App & browser control), Microsoft says it blocks unsigned apps and allows no exception for a single app, so Zeyvola will not start. Turning it off is your decision and affects the whole computer.
+- **Windows N editions:** They lack Microsoft's media components; MP4 export is expected to fall back to WebM (not tried yet). Add the **Media Feature Pack** under Settings › Apps › Optional features.
+- **Computers without a hardware video decoder** (for example some virtual machines): imported H.264 videos (MP4, MOV) may not preview. Zeyvola's own recordings are WebM and are not affected; a WebM copy of the video works.
+- **The file `d3dcompiler_47.dll`** arrives as `d3dcompiler_47.dll.terms-pending` and gets its real name only after you accept the terms, so the app folder must be writable.
 
-```powershell
-Get-FileHash .\Zeyvola-<sürüm>-windows-x64.zip                  # Windows (PowerShell; varsayılan SHA256)
-```
+</details>
 
-### macOS'ta kurulum / Installing on macOS
-1. `.dmg` dosyasını açın ve **Zeyvola**'yı yanındaki **Applications** (Uygulamalar) kısayoluna sürükleyin. (`.zip` indirdiyseniz: zip'i açın, içindeki `Zeyvola.app`'i **Uygulamalar** klasörüne taşıyın.)
-2. Zeyvola'yı **Uygulamalar** klasöründen açın.
-3. Zeyvola Apple Developer ID ile imzalanmadığı ve noterlenmediği için macOS ilk açılışı engeller:
-   - **macOS 15 ve sonrası:** Uygulamayı bir kez açmayı deneyin ve uyarıyı kapatın. Ardından **Sistem Ayarları › Gizlilik ve Güvenlik** bölümüne gidin (aşağı kaydırmanız gerekebilir); **Güvenlik** kısmında Zeyvola için **Yine de Aç**'a tıklayın ve Mac'inizin giriş parolasını girin. Apple'a göre bu düğme, uygulamayı açmayı denedikten sonra yaklaşık bir saat görünür; görünmüyorsa uygulamayı yeniden açmayı deneyin.
-   - **macOS 14 ve öncesi:** Uygulamaya sağ tıklayıp (ya da Control tuşuyla tıklayıp) **Aç**'ı seçin, sonra açılan pencerede yeniden **Aç**'a tıklayın.
+<details><summary><b>Permissions</b></summary>
 
-   Bu adım ilk açılışta gerekir; yeni bir sürümü indirdiğinizde yeniden gerekebilir.
-4. Zeyvola macOS 13 (Ventura) ya da sonrasını gerektirir.
+**macOS** asks for each permission when it is first needed; you can change them in **System Settings › Privacy & Security**:
+- **Screen & System Audio Recording** (**Screen Recording** on older macOS): for the screen and system audio. macOS asks on the first recording; quit and reopen Zeyvola after allowing it.
+- **Camera** and **Microphone**: when you use them in a recording. Their status is also shown, and can be requested, in Zeyvola's **Settings**.
+- The click helper watches only mouse buttons and scrolling. It needs no extra permission and does not read the keyboard.
 
-*Open the `.dmg` and drag **Zeyvola** onto the **Applications** shortcut next to it (from the `.zip`: move `Zeyvola.app` into **Applications**), then open it from **Applications**. Zeyvola is not signed with an Apple Developer ID or notarized, so macOS blocks the first launch. On macOS 15 and later, try to open it once, close the warning, then go to **System Settings › Privacy & Security** (you may need to scroll), click **Open Anyway** for Zeyvola in the **Security** section and enter your login password; Apple says the button is shown for about an hour after the attempt. On macOS 14 and earlier, right-click (or Control-click) the app, choose **Open**, then **Open** again. This is needed on the first launch and may be needed again after downloading a new version. Zeyvola needs macOS 13 (Ventura) or later.*
+Without a Developer ID signature, macOS may ask for screen recording again after an update. If it keeps an old entry and still blocks recording, remove the Zeyvola row with "−", reopen Zeyvola and allow it again; restart the Mac if needed.
 
-### Windows'ta kurulum / Installing on Windows
-> Windows sürümü **Beta**: GitHub'ın Windows makinesinde otomatik testlerden geçti; gerçek bir Windows 10/11 bilgisayarda henüz denenmedi. Önce aşağıdaki bilinen riskleri okuyun. Gerçek bir bilgisayarda deneyip sonucu bildirmek isterseniz: [Windows deneme listesi](docs/windows-deneme-listesi.md).
-> *The Windows version is a **beta**: it passed the automated tests on GitHub's Windows machine; it has not been tried on a real Windows 10/11 computer yet. Read the known risks below first. To try it on a real computer and report back, see the [Windows test checklist](docs/windows-deneme-listesi.md) (in Turkish).*
+**Windows** needs no separate permission for screen recording and clicks. If the camera or microphone does not work, allow desktop apps under **Settings › Privacy & security › Camera** (or **Microphone**); this applies to all desktop apps.
 
-1. `.zip` dosyasını kalıcı bir klasöre çıkarın (Dosya Gezgini'nde zip'e sağ tıklayıp *Extract All* / tümünü çıkar). Uygulamayı zip'in içinden çalıştırmayın: çalışmak için yanındaki dosyalara ihtiyaç duyar.
-2. Çıkan klasörde `Zeyvola\Zeyvola.exe` dosyasını açın. İsterseniz masaüstüne ya da Başlat menüsüne kısayol oluşturabilirsiniz.
-3. Zeyvola kod imzası olmadan dağıtıldığı için Microsoft Defender SmartScreen **"Windows bilgisayarınızı korudu"** (*Windows protected your PC*) uyarısını gösterebilir. **Ek bilgi**'ye (*More info*), sonra **Yine de çalıştır**'a (*Run anyway*) tıklayın. Kurumsal bilgisayarlarda yönetici politikası bu adımı kapatmış olabilir.
-4. **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de bu özellik açıksa (**Windows Güvenliği › Uygulama ve tarayıcı denetimi**), Microsoft'a göre imzasız uygulamaları engeller ve tek bir uygulama için istisna tanımlanamaz. Bu durumda Zeyvola hiç açılmayabilir. Özelliği kapatıp kapatmamak sizin kararınızdır; kapatmak bütün bilgisayarın korumasını etkiler.
-5. **İlk açılışta Microsoft bileşeni koşulları:** Zeyvola'nın Windows sürümü, görüntü işleme için Microsoft'a ait `d3dcompiler_47.dll` dosyasını içerir. Microsoft bu dosyanın ancak kullanıcı koşullarını kabul ederse dağıtılmasına izin verir; bu yüzden ilk açılışta, herhangi bir pencere açılmadan önce koşullar sorulur. Koşullar yalnızca bu dosya için geçerlidir ve Zeyvola'nın kendi lisansını değiştirmez. **Koşulları oku** tam metni açar (zip'te de `MICROSOFT-D3DCOMPILER-TERMS.txt` olarak bulunur). **Kabul ediyorum** derseniz Zeyvola bunu hatırlar ve bir kez kendiliğinden yeniden başlar; dosya pakette `d3dcompiler_47.dll.terms-pending` adıyla gelir ve ancak kabulden sonra asıl adını alır (bunun için uygulama klasörüne yazma izni gerekir). **Kabul etmiyorum** derseniz Zeyvola kapanır; bir sonraki açılışta koşullar yeniden sorulur.
+</details>
 
-*Extract the `.zip` to a permanent folder (right-click › Extract All in File Explorer); do not run the app from inside the zip, it needs the files next to it. Open `Zeyvola\Zeyvola.exe`. Zeyvola is distributed without a code signature, so Microsoft Defender SmartScreen may show "Windows protected your PC": click **More info**, then **Run anyway** (company policy may block this). On Windows 11, if Smart App Control is on (Windows Security › App & browser control), Microsoft says it blocks unsigned apps and cannot make an exception for a single app, so Zeyvola may not start at all; turning it off is your decision and affects the whole computer. On first launch, before any window opens, Zeyvola asks you to accept Microsoft's terms for `d3dcompiler_47.dll` (a Microsoft file used for graphics, shipped with the Windows version). They cover only that file and do not change Zeyvola's own license. **Read terms** opens the full text (also `MICROSOFT-D3DCOMPILER-TERMS.txt` in the zip). After **Accept**, Zeyvola remembers it and restarts once; after **Decline**, it quits and asks again next time.*
+<details><summary><b>Uninstall</b></summary>
 
-#### Windows Beta: bilinen riskler / Known risks
-- **SmartScreen:** Uygulama imzasız olduğu için ilk açılışta uyarı çıkar. **Ek bilgi › Yine de çalıştır** ile açın (yukarıdaki 3. adım). *Unsigned, so SmartScreen warns on first launch: choose **More info › Run anyway**.*
-- **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de açıksa imzasız uygulamaları engeller; Zeyvola hiç açılmaz. Tek uygulama için istisna yoktur; özelliği kapatıp kapatmamak sizin kararınızdır (4. adım). *If Smart App Control is on in Windows 11, Zeyvola will not run at all; there is no per-app exception, and turning it off is your call.*
-- **Windows N sürümleri:** Bu sürümlerde Microsoft'un medya bileşenleri yoktur; MP4 yerine WebM olarak kaydedilmesi beklenir (henüz denenmedi). **Ayarlar › Uygulamalar › İsteğe bağlı özellikler** altından *Media Feature Pack*'i ekleyin. *N editions lack Microsoft's media components, so MP4 export is expected to fall back to WebM (not tried yet); add the Media Feature Pack under Settings › Apps › Optional features.*
-- **Ekran kartı olmayan bilgisayarlarda H.264 önizleme:** Donanım video çözücüsü olmayan bilgisayarlarda (ör. bazı sanal makineler) içe aktarılan H.264 videoların (MP4, MOV) önizlemesi çalışmayabilir. Zeyvola'nın kendi kayıtları WebM olduğu için bundan etkilenmez; sorun olursa videonun WebM kopyasını ekleyin. *Without a hardware video decoder (e.g. some virtual machines), imported H.264 videos (MP4, MOV) may not preview; Zeyvola's own recordings are not affected, and a WebM copy of the video works.*
-
-### İzinler / Permissions
-**macOS.** Zeyvola her izni ilk gerektiğinde ister; vermediğiniz izinleri sonradan **Sistem Ayarları › Gizlilik ve Güvenlik** altında açabilirsiniz:
-- **Ekran ve Sistem Ses Kaydı** (eski macOS sürümlerinde adı **Ekran Kaydı**): ekranı ve sistem sesini kaydetmek için. macOS bu izni programla isteme yolu sunmaz; ilk kayıtta sorar. İzni açtıktan sonra Zeyvola'yı kapatıp yeniden açın.
-- **Kamera** ve **Mikrofon**: kayıtta kamerayı ya da mikrofonu kullandığınızda macOS sorar. İzinlerin durumu Zeyvola'nın **Ayarlar** ekranında da görünür ve oradan istenebilir.
-- Tıklama yardımcısı (`zeyvola-input`) yalnızca fare tuşlarını ve kaydırmayı izler; macOS'ta ek bir izin gerektirmez. Klavyeyi okumaz.
-
-Zeyvola Developer ID ile imzalanmadığı için macOS, güncellemeden sonra uygulamayı yeni bir uygulama gibi görebilir ve ekran kaydı iznini yeniden isteyebilir. macOS eski izni tutup kaydı yine de engellerse: **Ekran ve Sistem Ses Kaydı** listesinde Zeyvola satırını seçip "−" ile kaldırın, Zeyvola'yı yeniden açıp izni yeniden verin; gerekirse bilgisayarı yeniden başlatın.
-
-*Zeyvola asks for each permission when first needed; you can turn them on later in **System Settings › Privacy & Security**: **Screen & System Audio Recording** (**Screen Recording** on older macOS versions) for the screen and system audio — macOS asks on the first recording, and you need to quit and reopen Zeyvola after allowing it; **Camera** and **Microphone** when you use them in a recording (their status is also shown, and can be requested, in Zeyvola's **Settings**). The click helper watches only mouse buttons and scrolling, needs no extra permission and does not read the keyboard. Without a Developer ID signature macOS may treat an updated app as new and ask for screen recording again; if it keeps the old entry and still blocks recording, remove the Zeyvola row with "−", reopen Zeyvola, allow it again, and restart the Mac if needed.*
-
-**Windows.** Ekran kaydı ve tıklamalar için ayrı bir izin gerekmez. Kamera ya da mikrofon çalışmıyorsa **Ayarlar › Gizlilik ve güvenlik › Kamera** (ya da **Mikrofon**) bölümünde masaüstü uygulamalarının erişimine izin verin. Bu ayar tek tek uygulamalar için değil, bütün masaüstü uygulamaları için geçerlidir.
-
-*No separate permission is needed for screen recording and clicks. If the camera or microphone does not work, allow desktop apps to access them under **Settings › Privacy & security › Camera** (or **Microphone**); this setting applies to all desktop apps, not to one.*
-
-### Kaldırma / Uninstalling
-Uygulamayı silmek projelerinizi ve kayıtlarınızı **silmez**. Bunları isterseniz kendiniz silin.
-
-*Removing the app does **not** delete your projects and recordings; delete them yourself if you want.*
+Removing the app does **not** delete your projects; delete them yourself if you want.
 
 | | macOS | Windows |
 |---|---|---|
-| Uygulama / App | **Uygulamalar** klasöründeki `Zeyvola`'yı Çöp Sepeti'ne taşıyın / move it to the Trash | Zip'ten çıkardığınız klasörü silin (kurulum programı yoktur) / delete the extracted folder (there is no installer) |
-| Projeler ve kayıtlar / Projects and recordings | `~/Movies/Zeyvola Projeleri` (Finder'da **Filmler**) | **Videolar** klasörünüzdeki `Zeyvola Projeleri` (genellikle `%USERPROFILE%\Videos\Zeyvola Projeleri`) / in your **Videos** folder |
-| Ayarlar / Settings | `~/Library/Application Support/Zeyvola` | `%APPDATA%\Zeyvola` |
+| App | Move `Zeyvola` from **Applications** to the Trash | Delete the extracted folder (there is no installer) |
+| Projects and recordings | `~/Movies/Zeyvola Projeleri` | `Zeyvola Projeleri` in your **Videos** folder |
+| Settings | `~/Library/Application Support/Zeyvola` | `%APPDATA%\Zeyvola` |
 
-Dışa aktardığınız videolar, kaydederken seçtiğiniz klasördedir ve kaldırmadan etkilenmez. macOS'ta izin satırlarını da kaldırmak isterseniz **Sistem Ayarları › Gizlilik ve Güvenlik** altındaki listelerde (ör. **Ekran ve Sistem Ses Kaydı**) Zeyvola'yı seçip "−" ile kaldırın.
+Exported videos stay where you saved them. On macOS you can also remove Zeyvola's rows under **System Settings › Privacy & Security** with "−".
 
-*Exported videos stay in the folder you chose when saving. On macOS, to remove the permission entries too, select Zeyvola in the lists under **System Settings › Privacy & Security** (e.g. **Screen & System Audio Recording**) and click "−".*
+</details>
 
-### Sorun giderme / Troubleshooting
-- **macOS "Yine de Aç" düğmesini göstermiyor:** Düğme, uygulamayı açmayı denedikten sonra yaklaşık bir saat görünür. Zeyvola'yı yeniden açmayı deneyin, sonra **Gizlilik ve Güvenlik**'e dönün. *The **Open Anyway** button appears for about an hour after you try to open the app; try again, then go back to **Privacy & Security**.*
-- **Ekran kaydı başlamıyor (macOS):** Ekran kaydı izni verilmemiş ya da güncellemeden sonra eski izin geçersiz kalmış olabilir; yukarıdaki *İzinler* bölümüne bakın. *Screen recording does not start (macOS): the permission is missing or went stale after an update; see* Permissions *above.*
-- **MP4 dışa aktarma:** MP4 (H.264 + AAC) işletim sisteminin kodlayıcısıyla yazılır. Windows'ta ekran kartının H.264 kodlayıcısı yoksa Windows'un kendi yazılım kodlayıcısı kullanılır; bu daha yavaştır. O da yoksa video WebM olarak kaydedilir ve Zeyvola bunu dışa aktarmadan önce ve sonra söyler ("MP4 yerine WebM olarak kaydedildi"). WebM her zaman seçilebilir. *MP4 is written with the operating system's encoder. On Windows without a hardware H.264 encoder, Windows' software encoder is used (slower); without that, the video is saved as WebM and Zeyvola tells you before and after the export ("Saved as WebM instead of MP4"). WebM is always available.*
-- **Windows'ta kayıt basık ya da uzamış geldi:** Bazı bilgisayarlarda ekran görüntüsü kayda farklı oranda gelir. Zeyvola bunu fark edip ekranın gerçek oranıyla gösterir ve bir uyarı verir ("Ekran görüntüsü kayıtta basık geldi…"); bir yönde ayrıntı biraz az olabilir. *On some computers the screen arrives squeezed; Zeyvola shows it with the display's real shape and says so, with slightly less detail in one direction.*
-- **Windows'ta uygulama hiç açılmıyor:** Akıllı Uygulama Denetimi açık olabilir (yukarıdaki 4. adım) ya da uygulama zip'in içinden çalıştırılmış olabilir (1. adım). *Smart App Control may be on (step 4), or the app was started from inside the zip (step 1).*
+<details><summary><b>Troubleshooting</b></summary>
 
-## Geliştirici / Developer
-Zeyvola'yı **Yıldız Dikme** (Independent Software Developer) geliştirir. GitHub: [YildizDikme](https://github.com/YildizDikme).
+- **No "Open Anyway" button (macOS):** it appears for about an hour after you try to open the app. Try again, then return to **Privacy & Security**.
+- **Recording does not start (macOS):** the screen recording permission is missing or went stale after an update; see *Permissions*.
+- **MP4 export:** written with the operating system's encoder. On Windows without a hardware H.264 encoder, Windows' software encoder is used (slower); without that, the video is saved as WebM and Zeyvola tells you before and after the export. WebM is always available.
+- **Recording looks squeezed (Windows):** on some computers the screen arrives in a different shape. Zeyvola shows it with the display's real shape and says so; one direction may have slightly less detail.
+- **The app does not open (Windows):** Smart App Control may be on, or the app was started from inside the zip.
+- **Check a download (optional):** compare it with `SHA256SUMS.txt` from the Release: `shasum -a 256 <file>` on macOS, `Get-FileHash <file>` in PowerShell.
 
-Copyright © 2026 Yıldız Dikme. Zeyvola'nın kendi kodu aşağıdaki lisansla yayımlanır; üçüncü taraf bileşenler kendi lisanslarıyla dağıtılır.
+</details>
 
-*Zeyvola is developed by Yıldız Dikme (Independent Software Developer). Copyright © 2026 Yıldız Dikme. Zeyvola's own code is licensed as described below; third-party components keep their own licenses.*
+### Privacy
+Recordings, cursor data and projects stay on your computer. Zeyvola makes no network requests and sends no telemetry. Keystrokes are not recorded. Clicks are stored locally only, for zoom suggestions.
 
-## Lisans / License
-Zeyvola'nın kaynak kodu **[PolyForm Shield License 1.0.0](LICENSE)** ile yayımlanır. Bu lisans "kaynağı açık" (source-available) bir lisanstır; OSI anlamında açık kaynak değildir. Lisansın gerekli bildirim satırları [`NOTICE`](NOTICE) dosyasındadır.
+### Developer
+Zeyvola is developed by **Yıldız Dikme** (Independent Software Developer) · GitHub: [YildizDikme](https://github.com/YildizDikme). Copyright © 2026 Yıldız Dikme.
+
+### License
+Zeyvola's source code is published under the **[PolyForm Shield License 1.0.0](LICENSE)**. It is a source-available license, not an open-source license in the OSI sense. The required notice lines are in [`NOTICE`](NOTICE).
+
+In short (the license text governs; this summary adds nothing to it): individuals, companies and institutions may use, copy, modify and distribute Zeyvola free of charge. The license claims no rights in the videos, recordings and projects you make with it and does not limit their commercial use. The one purpose it does not permit is providing a product that competes with Zeyvola or with a product the licensor provides using it; under the license a product can compete even when it is free, and one marketed as a practical substitute for Zeyvola definitely competes.
+
+For the name and logo: [TRADEMARKS.md](TRADEMARKS.md).
+
+### Third-party software
+Zeyvola is built on Electron (Chromium) and a few JavaScript packages, each under its own license.
+- License texts: [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md); in the app: **Settings › Licenses and third-party software**.
+- FFmpeg (LGPL-2.1 or later): Electron's library built without proprietary codecs, shipped unchanged as a separate, dynamically linked file. The corresponding source is published with every release. You may replace the library with a compatible build and then re-sign the app.
+- MP4 export writes H.264 video and AAC sound produced by the operating system's own encoders (macOS VideoToolbox and AudioToolbox, Windows Media Foundation), not by the app's code. No H.264 or AAC encoder is added to the app, and Electron's software H.264 encoder (OpenH264) is not used. On Windows without a hardware H.264 encoder, Windows' own software encoder is used (through `native/helper-windows`); otherwise the video is saved as WebM and the app says so.
+- H.264 and AAC are patented codecs with royalty-bearing patent pools. How using the operating system's encoders affects those obligations is not legally settled, and this project gives no assurance about it. Details: [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md) (codec table).
+- WebM export uses VP9 + Opus. Their developers (Google, Xiph.Org) grant royalty-free licenses for their own patents; no assurance is given about third-party patent claims.
+
+<details><summary><b>Building from source</b></summary>
+
+Requirements: macOS (Apple silicon); Node.js 22.12+ (see `.nvmrc`; `nvm use` in the repository root); pnpm 10 (see `packageManager` in `package.json`); Xcode Command Line Tools (`xcode-select --install`) — packaging, the native helpers and the audit tools call `swiftc`, `clang`, `codesign`, `lipo`, `otool`, `objdump`, `ditto`, `hdiutil` and `PlistBuddy`, and `pnpm start` signs the development bundle with `codesign`.
+
+```bash
+nvm use                       # Node version from .nvmrc
+pnpm install
+pnpm --filter @zeyvola/desktop exec node node_modules/electron/install.js   # Electron binary
+pnpm dev                      # build and open the app (pnpm build && pnpm start)
+pnpm test && pnpm typecheck   # unit tests and type check
+pnpm package                  # macOS package → apps/desktop/out/mp4/darwin-<arch>/
+pnpm codec-audit -- apps/desktop/out/mp4/darwin-arm64 --profile mp4 --probe --release
+```
+
+`pnpm package` builds the published configuration by default (`ZEYVOLA_DIST=mp4`: the macOS recording helper; MP4 as H.264 + AAC, WebM as VP9 + Opus). The helper is built as a universal binary (arm64 + x86_64) by `native/recorder-macos/build.sh`. `--profile webm` is the configuration without the helper, recording through the browser engine only. Packages are ad-hoc signed for local testing.
+
+In-app test suites (temporary projects folder, synthetic camera and microphone; your own projects are never read; need a display and a GPU):
+- `pnpm smoke`: builds the app and self-tests the renderer stack (WebGL2 compositor, privacy effects, WebCodecs encoders, MP4/WebM writers) and reports what this machine supports.
+- `pnpm perftest`: times automatic zoom, playback and export.
+- `pnpm uitest`: drives the main flow through the interface and also opens every exported MP4 with macOS's own decoder (AVFoundation).
+- `node tests/media-check/av-check.mjs <file.mp4>`: checks an MP4 with AVFoundation (H.264 video, AAC sound, non-empty frames, duration).
+- `pnpm docshots`: renders the README screenshots from the sample project.
+
+Other notes:
+- `tests/real-capture/` records the real screen; it needs the Swift compiler and the macOS screen recording permission and is not part of `pnpm test` (see [tests/real-capture/README.md](tests/real-capture/README.md)).
+- `pnpm native:win` (Windows helper) needs the Zig compiler at `tools/.cache/zig/zig` or via `ZIG`; Zig is not in the repository.
+- The app makes no network requests, but some build and release tools do: `pnpm install` and the Electron download, `tools/ffmpeg-source.mjs` and `tools/electron-artifacts.mjs`.
+
+Structure:
+- `apps/desktop`: Electron main process, preload and React interface
+- `packages/timing`: tick-based time
+- `packages/project-model`: document schema, commands, undo/redo, `evaluate()`
+- `packages/zoom-engine`: automatic zoom suggestions
+- `packages/compositor`: WebGL2 renderer (preview and export)
+- `packages/media-web`: MP4 and WebM writers
+- `packages/protocol`: IPC contract and validation
+- `native/input-macos`: click helper (mouse buttons and scrolling; no codecs)
+- `native/recorder-macos`: macOS recording helper (ScreenCaptureKit; screen and camera as H.264 through macOS's encoder, sound as Opus)
+- `native/helper-windows`: Windows helper (clicks, imported audio, Media Foundation MP4)
+- `tools/`: license notices, codec audit, FFmpeg source package
+
+</details>
+
+### Contributing
+Bug reports and suggestions are welcome as [Issues](https://github.com/YildizDikme/zeyvola/issues). Code contributions (pull requests) are not accepted for now. Security problems: see [SECURITY.md](SECURITY.md).
+
+---
+
+## Türkçe
+
+![Zeyvola düzenleyicisi Türkçe arayüzle: zoom'lar, büyüteç, gizleme alanı ve kamera](docs/screenshots/kahraman-tr.png)
+
+<details><summary>Türkçe arayüzden diğer görüntüler</summary>
+
+![Düzenleyici: zaman çizelgesinde otomatik zoom önerileri](docs/screenshots/duzenleyici-tr.png)
+*Düzenleyici: otomatik zoom önerileri zaman çizelgesinde.*
+
+![Zaman çizelgesinde seçili bir zoom](docs/screenshots/zoom-secili-tr.png)
+*Zoom: tıklamalardan önerilir, elle ayarlanır.*
+
+![Telefon numarasının üstünde buzlu cam gizleme alanı](docs/screenshots/gizleme-alani-tr.png)
+*Gizleme: hassas bilgi buzlu camla kapatılır.*
+
+![Aynı kayıt dikey 9:16 formatta](docs/screenshots/dikey-9x16-tr.png)
+*Tek kayıt, birçok format.*
+
+![Dışa aktarma penceresi ve gizlilik kontrolü](docs/screenshots/disa-aktarma-tr.png)
+*Dışa aktarma: MP4 ya da WebM, gizlilik kontrolüyle.*
+
+![Projeler ekranı](docs/screenshots/proje-listesi-tr.png)
+*Projeler ve hızlı başlangıç: tüm ekran, pencere ya da bölge.*
+
+</details>
+
+### Neden Zeyvola
+- **Bir kez kaydet, sonra karar ver.** Ekran, kamera, mikrofon ve sistem sesi ayrı izlere kaydedilir. Kameranın yeri ve şekli, zoom, arka plan ve format kayıttan sonra, zaman çizelgesinde seçilir.
+- **Tıklamalarını izleyen zoom.** Zeyvola, tıkladığınız ve imlecin durduğu yerlerden zoom önerir. Önerileri tutun, taşıyın ya da kendiniz çizin; elle eklediğiniz zoom'lara dokunulmaz.
+- **Gerçekten gizleyen gizleme.** Herhangi bir alanı buzlu cam, bulanıklık, piksel ya da opak kutuyla kapatın. Dışa aktarılan her kare bu efektlerden geçer; dışa aktarma penceresi her gizleme alanının ilk ve son karesini gösterir, kaydetmeden önce kontrol edersiniz.
+- **Ayrıntı için büyüteç.** Büyüteç, seçtiğiniz aralıklarda imleci takip eder; boyutu ve yakınlaştırması ayrı ayarlanır. Gizlenen alanları açığa çıkarmaz.
+- **Tek kayıt, birçok format.** Aynı projeden 16:9, 9:16, 1:1 ve 4:5; her biri kendi çerçeve ayarıyla.
+- **Standart dosyalar.** **MP4** (H.264 + AAC, işletim sisteminin kendi kodlayıcısıyla; macOS ve Windows'un kendi oynatıcıları açar) ya da **WebM** (VP9 + Opus); 1080p veya 4K, 30 veya 60 fps.
+- **Kayıtlarınız sizde kalır.** Projeler ve kayıtlar bilgisayarınızda kalır. Zeyvola ağ isteği yapmaz, telemetri göndermez, tuş vuruşlarını kaydetmez.
+- **Çökme kaydı götürmez.** Kayıt sırasında Zeyvola ya da kayıt yardımcısı kapanırsa, kayıt bir sonraki açılışta projesine geri eklenir.
+- **Türkçe ve İngilizce arayüz.** İlk açılışta bilgisayarınızın diline uyar; istediğiniz zaman değiştirebilirsiniz.
+
+Zaman çizelgesinde ayrıca: kesme, bölme, video ekleme (MP4, MOV, WebM), kayıt sırasında işaret koyma, duraklatma ve devam, zaman içinde kamera hareketi, temalar ve arka planlar, geri al ve yinele.
+
+### 0.1.0'da neler var
+- **macOS** (Apple Silicon ve Intel), macOS 13 Ventura ve sonrası. Kayıt, Zeyvola'nın macOS kayıt yardımcısıyla yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Intel paketi bir Apple Silicon Mac'te Rosetta 2 altında uygulamanın kendi testlerinin tamamından geçti; Intel donanımında henüz denenmedi.
+- **Windows 10 / 11** (64 bit). Otomatik testler GitHub'ın Windows makinesinde geçti; uygulama gerçek bir Windows bilgisayarda kurulup kayıt yapılarak denendi. Her donanımda denenmedi. Windows'ta kayıt tarayıcı motoru üzerinden yapılır: sistem sesi kaydedilebilir, imleç videoya gömülür.
+
+Bir sorun mu var? Lütfen bir [Issue](https://github.com/YildizDikme/zeyvola/issues) açın.
+
+### Kurulum
+**macOS**
+1. `.dmg` dosyasını açın ve **Zeyvola**'yı **Applications** (Uygulamalar) kısayoluna sürükleyin.
+2. Zeyvola'yı **Uygulamalar** klasöründen açın. Apple Developer ID ile imzalanmadığı için macOS ilk açılışı engeller:
+   - **macOS 15 ve sonrası:** Uygulamayı bir kez açmayı deneyin ve uyarıyı kapatın. **Sistem Ayarları › Gizlilik ve Güvenlik** bölümünde, **Güvenlik** kısmında Zeyvola için **Yine de Aç**'a tıklayın ve giriş parolanızı girin. Apple bu düğmeyi denemeden sonra yaklaşık bir saat gösterir.
+   - **macOS 14 ve öncesi:** Uygulamaya sağ tıklayıp (ya da Control tuşuyla tıklayıp) **Aç**'ı, sonra yeniden **Aç**'ı seçin.
+
+   Bu adım ilk açılışta gerekir; yeni bir sürümü indirdiğinizde yeniden gerekebilir.
+
+**Windows**
+1. `.zip` dosyasını kalıcı bir klasöre çıkarın (sağ tık › **Tümünü ayıkla** / *Extract All*). Uygulamayı zip'in içinden çalıştırmayın.
+2. `Zeyvola\Zeyvola.exe` dosyasını açın.
+3. Microsoft Defender SmartScreen **"Windows bilgisayarınızı korudu"** uyarısını gösterebilir: **Ek bilgi**'ye, sonra **Yine de çalıştır**'a tıklayın (*More info › Run anyway*).
+4. İlk açılışta Zeyvola, Windows sürümünde bulunan Microsoft grafik dosyası `d3dcompiler_47.dll` için Microsoft'un koşullarını sorar. Koşullar yalnızca bu dosya için geçerlidir ve Zeyvola'nın lisansını değiştirmez. **Koşulları oku** tam metni açar. **Kabul ediyorum** derseniz Zeyvola bir kez yeniden başlar ve bir daha sormaz; **Kabul etmiyorum** derseniz kapanır ve bir sonraki açılışta yeniden sorar.
+
+<details><summary><b>Windows notları</b></summary>
+
+- **SmartScreen:** Zeyvola kod imzalı olmadığı için SmartScreen ilk açılışta uyarır. Kurumsal politika **Yine de çalıştır**'ı engelleyebilir.
+- **Akıllı Uygulama Denetimi (Smart App Control):** Windows 11'de açıksa (Windows Güvenliği › Uygulama ve tarayıcı denetimi), Microsoft'a göre imzasız uygulamaları engeller ve tek bir uygulama için istisna tanımlanamaz; Zeyvola açılmaz. Özelliği kapatmak sizin kararınızdır ve bütün bilgisayarı etkiler.
+- **Windows N sürümleri:** Microsoft'un medya bileşenleri yoktur; MP4 yerine WebM'e düşülmesi beklenir (henüz denenmedi). **Ayarlar › Uygulamalar › İsteğe bağlı özellikler** altından **Media Feature Pack**'i ekleyin.
+- **Donanım video çözücüsü olmayan bilgisayarlar** (ör. bazı sanal makineler): İçe aktarılan H.264 videoların (MP4, MOV) önizlemesi çalışmayabilir. Zeyvola'nın kendi kayıtları WebM olduğu için etkilenmez; videonun WebM kopyası çalışır.
+- **`d3dcompiler_47.dll` dosyası** `d3dcompiler_47.dll.terms-pending` adıyla gelir ve koşulları kabul edince asıl adını alır; bu yüzden uygulama klasörüne yazılabilmelidir.
+
+</details>
+
+<details><summary><b>İzinler</b></summary>
+
+**macOS** her izni ilk gerektiğinde ister; **Sistem Ayarları › Gizlilik ve Güvenlik** altından değiştirebilirsiniz:
+- **Ekran ve Sistem Ses Kaydı** (eski macOS'ta **Ekran Kaydı**): ekran ve sistem sesi için. macOS ilk kayıtta sorar; izni verdikten sonra Zeyvola'yı kapatıp yeniden açın.
+- **Kamera** ve **Mikrofon**: kayıtta kullandığınızda. Durumları Zeyvola'nın **Ayarlar** ekranında da görünür ve oradan istenebilir.
+- Tıklama yardımcısı yalnızca fare tuşlarını ve kaydırmayı izler. Ek izin gerektirmez, klavyeyi okumaz.
+
+Developer ID imzası olmadığı için macOS güncellemeden sonra ekran kaydı iznini yeniden isteyebilir. Eski kaydı tutup yine engellerse Zeyvola satırını "−" ile kaldırın, Zeyvola'yı yeniden açıp izni yeniden verin; gerekirse Mac'i yeniden başlatın.
+
+**Windows**'ta ekran kaydı ve tıklamalar için ayrı izin gerekmez. Kamera ya da mikrofon çalışmıyorsa **Ayarlar › Gizlilik ve güvenlik › Kamera** (ya da **Mikrofon**) altında masaüstü uygulamalarına izin verin; bu ayar bütün masaüstü uygulamaları için geçerlidir.
+
+</details>
+
+<details><summary><b>Kaldırma</b></summary>
+
+Uygulamayı silmek projelerinizi **silmez**; isterseniz kendiniz silin.
+
+| | macOS | Windows |
+|---|---|---|
+| Uygulama | **Uygulamalar**'daki `Zeyvola`'yı Çöp Sepeti'ne taşıyın | Çıkardığınız klasörü silin (kurulum programı yoktur) |
+| Projeler ve kayıtlar | `~/Movies/Zeyvola Projeleri` (Finder'da **Filmler**) | **Videolar** klasörünüzdeki `Zeyvola Projeleri` |
+| Ayarlar | `~/Library/Application Support/Zeyvola` | `%APPDATA%\Zeyvola` |
+
+Dışa aktardığınız videolar kaydettiğiniz yerde kalır. macOS'ta **Sistem Ayarları › Gizlilik ve Güvenlik** altındaki Zeyvola satırlarını da "−" ile kaldırabilirsiniz.
+
+</details>
+
+<details><summary><b>Sorun giderme</b></summary>
+
+- **"Yine de Aç" düğmesi yok (macOS):** Düğme, açmayı denedikten sonra yaklaşık bir saat görünür. Yeniden deneyin, sonra **Gizlilik ve Güvenlik**'e dönün.
+- **Kayıt başlamıyor (macOS):** Ekran kaydı izni yok ya da güncellemeden sonra geçersiz kaldı; *İzinler*'e bakın.
+- **MP4 dışa aktarma:** İşletim sisteminin kodlayıcısıyla yazılır. Windows'ta ekran kartının H.264 kodlayıcısı yoksa Windows'un yazılım kodlayıcısı kullanılır (daha yavaş); o da yoksa video WebM olarak kaydedilir ve Zeyvola bunu dışa aktarmadan önce ve sonra söyler. WebM her zaman seçilebilir.
+- **Kayıt basık görünüyor (Windows):** Bazı bilgisayarlarda ekran görüntüsü kayda farklı oranda gelir. Zeyvola ekranın gerçek oranıyla gösterir ve bunu söyler; bir yönde ayrıntı biraz az olabilir.
+- **Uygulama açılmıyor (Windows):** Akıllı Uygulama Denetimi açık olabilir ya da uygulama zip'in içinden çalıştırılmıştır.
+- **İndirmeyi doğrulama (isteğe bağlı):** Release'teki `SHA256SUMS.txt` ile karşılaştırın: macOS'ta `shasum -a 256 <dosya>`, PowerShell'de `Get-FileHash <dosya>`.
+- **Gerçek bir Windows bilgisayarda deneyip bildirmek için:** [Windows deneme listesi](docs/windows-deneme-listesi.md).
+
+</details>
+
+### Gizlilik
+Kayıtlar, imleç verileri ve projeler bilgisayarınızda kalır. Zeyvola ağ isteği yapmaz ve telemetri göndermez. Tuş vuruşları kaydedilmez. Tıklamalar yalnızca zoom önerileri için ve yalnızca yerelde saklanır.
+
+### Geliştirici
+Zeyvola'yı **Yıldız Dikme** (Independent Software Developer) geliştirir · GitHub: [YildizDikme](https://github.com/YildizDikme). Copyright © 2026 Yıldız Dikme.
+
+### Lisans
+Zeyvola'nın kaynak kodu **[PolyForm Shield License 1.0.0](LICENSE)** ile yayımlanır. Bu lisans "kaynağı açık" (source-available) bir lisanstır; OSI anlamında açık kaynak değildir. Gerekli bildirim satırları [`NOTICE`](NOTICE) dosyasındadır.
 
 Kısaca (bağlayıcı olan lisans metnidir; bu özet ona bir şey eklemez):
 - Zeyvola'yı kişiler, şirketler ve kurumlar ücretsiz kullanabilir; kopyalayabilir, değiştirebilir ve dağıtabilir.
@@ -166,59 +320,45 @@ Kısaca (bağlayıcı olan lisans metnidir; bu özet ona bir şey eklemez):
 - İzin verilmeyen tek amaç, Zeyvola ile ya da lisans verenin Zeyvola'yı kullanarak sunduğu bir ürünle **rekabet eden bir ürün sağlamaktır**. Lisansa göre bir ürün ücretsiz olsa da rakip olabilir; Zeyvola'nın yerine geçecek şekilde sunulan bir ürün kesinlikle rakiptir.
 - Bir kullanımın rekabet sayılıp sayılmadığı her durumda lisans metnine göre değerlendirilir.
 
-*In short (the license text governs; this summary adds nothing to it): individuals, companies and institutions may use, copy, modify and distribute Zeyvola free of charge. The license claims no rights in the videos, recordings and projects you make with it and does not limit their commercial use. The one purpose it does not permit is providing a product that competes with Zeyvola or with a product the licensor provides using it; under the license a product can compete even when it is free, and one marketed as a practical substitute for Zeyvola definitely competes.*
-
 "Zeyvola" adı ve logosu için: [TRADEMARKS.md](TRADEMARKS.md).
 
-## Üçüncü taraf yazılımlar / Third-party software
-Zeyvola, Electron (Chromium) ve birkaç JavaScript paketi üzerine kuruludur. Her bileşen kendi lisansıyla dağıtılır.
-- Lisans metinleri: [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md). Uygulama içinde: **Ayarlar › Lisanslar**.
-- FFmpeg (LGPL-2.1 veya üstü): Electron'un tescilli codec'ler olmadan derlenmiş kitaplığı değiştirilmeden, ayrı ve dinamik bağlı bir dosya olarak dağıtılır. Karşılık gelen kaynak kodu her sürümle birlikte yayımlanır. Kitaplığı uyumlu bir sürümle değiştirebilirsiniz; ardından uygulamayı yeniden imzalayın.
-- MP4 dışa aktarma H.264 görüntü ve AAC ses yazar. Bunları uygulamanın kendi kodu değil, işletim sisteminin kodlayıcısı üretir (macOS: VideoToolbox ve AudioToolbox; Windows: Media Foundation). Uygulamaya H.264 ya da AAC kodlayıcısı eklenmez; Electron'un içindeki yazılım H.264 kodlayıcısı (OpenH264) kullanılmaz. Ekran kartında H.264 kodlayıcısı yoksa Windows'ta Windows'un kendi yazılım kodlayıcısı kullanılır (daha yavaş; `native/helper-windows` aracılığıyla). O da yoksa video WebM olarak kaydedilir ve uygulama bunu dışa aktarmadan önce ve sonra açıkça söyler.
+### Üçüncü taraf yazılımlar
+Zeyvola, Electron (Chromium) ve birkaç JavaScript paketi üzerine kuruludur; her bileşen kendi lisansıyla dağıtılır.
+- Lisans metinleri: [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md); uygulama içinde: **Ayarlar › Lisanslar ve üçüncü taraf yazılımlar**.
+- FFmpeg (LGPL-2.1 veya üstü): Electron'un tescilli codec'ler olmadan derlenmiş kitaplığı değiştirilmeden, ayrı ve dinamik bağlı bir dosya olarak dağıtılır. Karşılık gelen kaynak kodu her sürümle yayımlanır. Kitaplığı uyumlu bir sürümle değiştirebilirsiniz; ardından uygulamayı yeniden imzalayın.
+- MP4 dışa aktarma H.264 görüntü ve AAC ses yazar; bunları uygulamanın kendi kodu değil, işletim sisteminin kodlayıcısı üretir (macOS: VideoToolbox ve AudioToolbox; Windows: Media Foundation). Uygulamaya H.264 ya da AAC kodlayıcısı eklenmez; Electron'un içindeki yazılım H.264 kodlayıcısı (OpenH264) kullanılmaz. Windows'ta ekran kartının H.264 kodlayıcısı yoksa Windows'un kendi yazılım kodlayıcısı kullanılır (`native/helper-windows` aracılığıyla); o da yoksa video WebM olarak kaydedilir ve uygulama bunu söyler.
 - H.264 ve AAC patentli codec'lerdir; telif ücretli patent havuzları vardır. İşletim sisteminin kodlayıcısını kullanmanın bu yükümlülükleri nasıl etkilediği hukuken netleşmemiştir; bu proje bu konuda bir güvence vermez. Ayrıntılar: [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md) (codec tablosu).
 - WebM dışa aktarma VP9 + Opus ile yapılır. Bu biçimlerin geliştiricileri (Google, Xiph.Org) kendi patentleri için telifsiz izin verir; üçüncü kişilerin patent iddiaları için bir güvence verilmez.
-- *MP4 export writes H.264 video and AAC sound, produced by the operating system's own encoders (macOS VideoToolbox and AudioToolbox, Windows Media Foundation), not by the app's code; Electron's software H.264 encoder (OpenH264) is not used. Without a hardware H.264 encoder, Windows' own software encoder is used on Windows (slower, through `native/helper-windows`); otherwise the video is saved as WebM and the app says so before and after the export. H.264 and AAC are patented codecs with royalty-bearing patent pools; how using the operating system's encoders affects those obligations is not legally settled, and this project gives no assurance about it. WebM export uses VP9 + Opus.*
 
-## Kaynaktan derleme / Building from source
-Gereksinimler / Requirements:
-- macOS (Apple Silicon)
-- Node.js 22.12+ (sürüm `.nvmrc` dosyasında; nvm kullanıyorsanız depo kökünde `nvm use`)
-- pnpm 10 (sürüm kök `package.json` içindeki `packageManager` alanında)
-- Xcode komut satırı araçları (`xcode-select --install`): paketleme, yerel yardımcılar ve denetim araçları `swiftc`, `clang`, `codesign`, `lipo`, `otool`, `objdump`, `ditto`, `hdiutil`, `PlistBuddy` kullanır. `pnpm start` de geliştirme paketini `codesign` ile imzalar.
+<details><summary><b>Kaynaktan derleme</b></summary>
 
-*Requirements: macOS (Apple Silicon); Node.js 22.12+ (see `.nvmrc`; run `nvm use` in the repository root if you use nvm); pnpm 10 (see `packageManager` in the root `package.json`); Xcode Command Line Tools, since packaging, the native helpers and the audit tools call `swiftc`, `clang`, `codesign`, `lipo`, `otool` and similar tools.*
+Gereksinimler: macOS (Apple Silicon); Node.js 22.12+ (`.nvmrc`; depo kökünde `nvm use`); pnpm 10 (`package.json` içindeki `packageManager`); Xcode komut satırı araçları (`xcode-select --install`) — paketleme, yerel yardımcılar ve denetim araçları `swiftc`, `clang`, `codesign`, `lipo`, `otool`, `objdump`, `ditto`, `hdiutil` ve `PlistBuddy` kullanır; `pnpm start` geliştirme paketini `codesign` ile imzalar.
 
 ```bash
 nvm use                       # .nvmrc'deki Node sürümü
 pnpm install
 pnpm --filter @zeyvola/desktop exec node node_modules/electron/install.js   # Electron ikili dosyası
-pnpm dev                      # geliştirme: derle ve uygulamayı aç (pnpm build && pnpm start)
+pnpm dev                      # derle ve uygulamayı aç (pnpm build && pnpm start)
 pnpm test && pnpm typecheck   # birim testleri ve tip denetimi
 pnpm package                  # macOS paketi → apps/desktop/out/mp4/darwin-<arch>/
 pnpm codec-audit -- apps/desktop/out/mp4/darwin-arm64 --profile mp4 --probe --release
 ```
 
-`pnpm package` varsayılan olarak yayımlanan yapılandırmayı (`ZEYVOLA_DIST=mp4`: macOS kayıt yardımcısı; dışa aktarma MP4 H.264 + AAC ve WebM VP9 + Opus) derler. Kayıt yardımcısı `native/recorder-macos/build.sh` ile evrensel ikili (arm64 + x86_64) olarak derlenir. `--profile webm` kayıt yardımcısı olmayan, yalnızca tarayıcı yoluyla kaydeden yapılandırmadır. Paketler yerel test için geçici imzalanır.
+`pnpm package` varsayılan olarak yayımlanan yapılandırmayı (`ZEYVOLA_DIST=mp4`: macOS kayıt yardımcısı; MP4 H.264 + AAC, WebM VP9 + Opus) derler. Kayıt yardımcısı `native/recorder-macos/build.sh` ile evrensel ikili (arm64 + x86_64) olarak derlenir. `--profile webm`, kayıt yardımcısı olmadan yalnızca tarayıcı motoruyla kaydeden yapılandırmadır. Paketler yerel test için geçici imzalanır.
 
-*`pnpm package` builds the published configuration by default (`ZEYVOLA_DIST=mp4`: the macOS recording helper; MP4 export as H.264 + AAC, WebM as VP9 + Opus). The helper is built as a universal binary (arm64 + x86_64) by `native/recorder-macos/build.sh`. `--profile webm` is the configuration without the helper, recording through the browser only. Packages are ad-hoc signed for local testing.*
-
-Uygulama içi test takımları / In-app test suites (geçici bir proje klasörü, sentetik kamera ve mikrofonla çalışır; kendi projeleriniz okunmaz. Ekran ve GPU gerektirir):
-- `pnpm smoke`: uygulamayı derler ve arayüz katmanını kendi kendine dener (WebGL2 kompozitör, gizleme efektleri, WebCodecs kodlayıcıları, MP4/WebM yazıcıları); bu Mac için bir yetenek tablosu raporlar.
+Uygulama içi test takımları (geçici proje klasörü, sentetik kamera ve mikrofon; kendi projeleriniz okunmaz; ekran ve GPU gerekir):
+- `pnpm smoke`: uygulamayı derler ve arayüz katmanını kendi kendine dener (WebGL2 kompozitör, gizleme efektleri, WebCodecs kodlayıcıları, MP4/WebM yazıcıları); bu makinenin neleri desteklediğini raporlar.
 - `pnpm perftest`: otomatik zoom, oynatma ve dışa aktarma sürelerini ölçer.
 - `pnpm uitest`: ana akışı arayüz üzerinden sürer; dışa aktarılan her MP4'ü macOS'un kendi çözücüsüyle (AVFoundation) de açar.
-- `node tests/media-check/av-check.mjs <dosya.mp4>`: bir MP4'ü AVFoundation ile denetler (H.264 görüntü, AAC ses, boş olmayan kare, süre); QuickTime'ın göreceğini gösterir.
-- `pnpm docshots`: örnek projeden README için ekran görüntüleri üretir.
+- `node tests/media-check/av-check.mjs <dosya.mp4>`: bir MP4'ü AVFoundation ile denetler (H.264 görüntü, AAC ses, boş olmayan kare, süre).
+- `pnpm docshots`: örnek projeden README ekran görüntülerini üretir.
 
-*The in-app suites use a temporary projects folder and a synthetic camera and microphone, and need a display and a GPU: `pnpm smoke` builds the app and self-tests the renderer stack (WebGL2 compositor, privacy effects, WebCodecs encoders, MP4/WebM writers), reporting a capability matrix for this Mac; `pnpm perftest` times automatic zoom, playback and export; `pnpm uitest` drives the main flow through the interface; `pnpm docshots` renders README screenshots from the sample project.*
+Diğer notlar:
+- `tests/real-capture/` gerçek ekran kaydı yapar; Swift derleyicisi ve macOS ekran kaydı izni ister, `pnpm test`'e dahil değildir (bkz. [tests/real-capture/README.md](tests/real-capture/README.md)).
+- `pnpm native:win` (Windows yardımcısı) Zig derleyicisi ister: `tools/.cache/zig/zig` yolunda ya da `ZIG` ile. Zig depoda yoktur.
+- Uygulama ağ isteği yapmaz; ancak bazı derleme ve yayın araçları ağ ister: `pnpm install` ve Electron indirmesi, `tools/ffmpeg-source.mjs` ve `tools/electron-artifacts.mjs`.
 
-Diğer notlar / Other notes:
-- `tests/real-capture/` gerçek ekran kaydı yapar: Swift derleyicisi ve macOS ekran kaydı izni ister; `pnpm test`'e dahil değildir (bkz. [tests/real-capture/README.md](tests/real-capture/README.md)).
-- `pnpm native:win` (Windows yardımcısı, deneysel) Zig derleyicisi ister: `tools/.cache/zig/zig` yolunda ya da `ZIG` ortam değişkeniyle. Zig depoda yoktur.
-- Uygulama ağ isteği yapmaz; ancak bazı yayın araçları ağ ister: `pnpm install` ve Electron indirmesi, `tools/ffmpeg-source.mjs` (FFmpeg kaynak paketi) ve `tools/electron-artifacts.mjs`.
-
-*`tests/real-capture/` records the real screen and needs the Swift compiler and the macOS screen recording permission; it is not part of `pnpm test`. `pnpm native:win` (Windows helper, experimental) needs the Zig compiler at `tools/.cache/zig/zig` or via `ZIG`; Zig is not in the repository. The app makes no network requests, but some release tools do: `pnpm install` and the Electron download, `tools/ffmpeg-source.mjs` and `tools/electron-artifacts.mjs`.*
-
-## Yapı / Structure
+Yapı:
 - `apps/desktop`: Electron ana süreç, preload ve React arayüzü
 - `packages/timing`: tick tabanlı zaman
 - `packages/project-model`: belge şeması, komutlar, geri al/yinele, `evaluate()`
@@ -227,10 +367,11 @@ Diğer notlar / Other notes:
 - `packages/media-web`: MP4 ve WebM yazıcıları
 - `packages/protocol`: IPC sözleşmesi ve doğrulama
 - `native/input-macos`: tıklama yardımcısı (fare tuşları ve kaydırma; codec içermez)
-- `native/recorder-macos`: macOS kayıt yardımcısı (ScreenCaptureKit; ekranı ve kamerayı macOS'un kodlayıcısıyla H.264 yazar, sesi Opus). Yayımlanan sürümde vardır.
+- `native/recorder-macos`: macOS kayıt yardımcısı (ScreenCaptureKit; ekranı ve kamerayı macOS'un kodlayıcısıyla H.264, sesi Opus olarak yazar)
+- `native/helper-windows`: Windows yardımcısı (tıklamalar, eklenen videonun sesi, Media Foundation ile MP4)
 - `tools/`: lisans bildirimleri, codec denetimi, FFmpeg kaynak paketi
 
-## Katkı / Contributing
-Hata bildirimleri ve öneriler için **Issues** kullanılabilir. Şimdilik dışarıdan kod katkısı (pull request) kabul edilmiyor.
+</details>
 
-*Bug reports and suggestions are welcome as Issues. Code contributions (pull requests) are not accepted for now.*
+### Katkı
+Hata bildirimleri ve öneriler için [Issues](https://github.com/YildizDikme/zeyvola/issues) kullanılabilir. Şimdilik dışarıdan kod katkısı (pull request) kabul edilmiyor. Güvenlik açıkları için: [SECURITY.md](SECURITY.md).
