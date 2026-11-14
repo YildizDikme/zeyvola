@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "author": "Yıldız Dikme",
   "license": "PolyForm-Shield-1.0.0",
-  "homepage": "https://github.com/YildizDikme/zeyvola",
+  "homepage": "https://github.com/YildizDikme/zeyvola-screen-recorder",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YildizDikme/zeyvola.git"
+    "url": "https://github.com/YildizDikme/zeyvola-screen-recorder.git"
   },
   "type": "module",
   "engines": {

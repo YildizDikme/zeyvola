@@ -7,9 +7,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg"><img src="docs/readme/download-mac-arm64.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with Apple silicon (.dmg)"></a>
-  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg"><img src="docs/readme/download-mac-intel.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with an Intel processor (.dmg)"></a>
-  <a href="https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip"><img src="docs/readme/download-windows.svg" width="300" alt="Download Zeyvola 0.1.0 for Windows 10 and 11, 64-bit (.zip)"></a>
+  <a href="https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg"><img src="docs/readme/download-mac-arm64.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with Apple silicon (.dmg)"></a>
+  <a href="https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg"><img src="docs/readme/download-mac-intel.svg" width="300" alt="Download Zeyvola 0.1.0 for Mac with an Intel processor (.dmg)"></a>
+  <a href="https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip"><img src="docs/readme/download-windows.svg" width="300" alt="Download Zeyvola 0.1.0 for Windows 10 and 11, 64-bit (.zip)"></a>
 </p>
 
 <p align="center">
@@ -18,13 +18,13 @@
 
 | Computer | Download |
 |---|---|
-| Mac with Apple silicon (M1, M2, M3, M4 …) | [**Zeyvola-0.1.0-macos-arm64.dmg**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg) |
-| Mac with an Intel processor | [**Zeyvola-0.1.0-macos-x64.dmg**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg) |
-| Windows 10 / 11 (64-bit) | [**Zeyvola-0.1.0-windows-x64.zip**](https://github.com/YildizDikme/zeyvola/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip) |
+| Mac with Apple silicon (M1, M2, M3, M4 …) | [**Zeyvola-0.1.0-macos-arm64.dmg**](https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-macos-arm64.dmg) |
+| Mac with an Intel processor | [**Zeyvola-0.1.0-macos-x64.dmg**](https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-macos-x64.dmg) |
+| Windows 10 / 11 (64-bit) | [**Zeyvola-0.1.0-windows-x64.zip**](https://github.com/YildizDikme/zeyvola-screen-recorder/releases/download/v0.1.0/Zeyvola-0.1.0-windows-x64.zip) |
 
 Which Mac? Apple menu › **About This Mac**: "Chip: Apple M…" → Apple silicon, "Processor: … Intel …" → Intel. · *Hangi Mac? Apple menüsü › **Bu Mac Hakkında**: "Çip: Apple M…" → Apple Silicon, "İşlemci: … Intel …" → Intel.*
 
-All files, checksums and the FFmpeg source package: [Releases](https://github.com/YildizDikme/zeyvola/releases). The app is not code-signed yet, so the first launch needs one extra click — see *Install* below. · *Uygulama henüz kod imzalı değil; ilk açılışta bir ek adım gerekir, aşağıdaki* Kurulum *bölümüne bakın.*
+All files, checksums and the FFmpeg source package: [Releases](https://github.com/YildizDikme/zeyvola-screen-recorder/releases). The app is not code-signed yet, so the first launch needs one extra click — see *Install* below. · *Uygulama henüz kod imzalı değil; ilk açılışta bir ek adım gerekir, aşağıdaki* Kurulum *bölümüne bakın.*
 
 <p align="center"><b><a href="#english">English</a> · <a href="#türkçe">Türkçe</a></b></p>
 
@@ -77,7 +77,7 @@ Also on the timeline: trim, split, add videos (MP4, MOV, WebM), markers during r
 - **macOS** (Apple silicon and Intel), macOS 13 Ventura or later. Recording uses Zeyvola's macOS recording helper: system audio goes to its own track and the pointer is kept out of the video. The Intel package passed all of the app's own tests under Rosetta 2 on an Apple silicon Mac; it has not been tried on Intel hardware yet.
 - **Windows 10 / 11** (64-bit). The automated tests passed on GitHub's Windows machine, and the app has been installed and used for recording on a real Windows PC. It has not been tried on every kind of hardware. On Windows, recording goes through the browser engine: system audio can be recorded and the pointer is part of the video.
 
-Something not working? Please open an [Issue](https://github.com/YildizDikme/zeyvola/issues).
+Something not working? Please open an [Issue](https://github.com/YildizDikme/zeyvola-screen-recorder/issues).
 
 ### Install
 **macOS**
@@ -207,7 +207,7 @@ Structure:
 </details>
 
 ### Contributing
-Bug reports and suggestions are welcome as [Issues](https://github.com/YildizDikme/zeyvola/issues). Code contributions (pull requests) are not accepted for now. Security problems: see [SECURITY.md](SECURITY.md).
+Bug reports and suggestions are welcome as [Issues](https://github.com/YildizDikme/zeyvola-screen-recorder/issues). Code contributions (pull requests) are not accepted for now. Security problems: see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -262,7 +262,7 @@ Zaman çizelgesinde ayrıca: kesme, bölme, video ekleme (MP4, MOV, WebM), kayı
 - **macOS** (Apple Silicon ve Intel), macOS 13 Ventura ve sonrası. Kayıt, Zeyvola'nın macOS kayıt yardımcısıyla yapılır: sistem sesi ayrı bir ize, imleç videodan ayrı kaydedilir. Intel paketi bir Apple Silicon Mac'te Rosetta 2 altında uygulamanın kendi testlerinin tamamından geçti; Intel donanımında henüz denenmedi.
 - **Windows 10 / 11** (64 bit). Otomatik testler GitHub'ın Windows makinesinde geçti; uygulama gerçek bir Windows bilgisayarda kurulup kayıt yapılarak denendi. Her donanımda denenmedi. Windows'ta kayıt tarayıcı motoru üzerinden yapılır: sistem sesi kaydedilebilir, imleç videoya gömülür.
 
-Bir sorun mu var? Lütfen bir [Issue](https://github.com/YildizDikme/zeyvola/issues) açın.
+Bir sorun mu var? Lütfen bir [Issue](https://github.com/YildizDikme/zeyvola-screen-recorder/issues) açın.
 
 ### Kurulum
 **macOS**
@@ -397,4 +397,4 @@ Yapı:
 </details>
 
 ### Katkı
-Hata bildirimleri ve öneriler için [Issues](https://github.com/YildizDikme/zeyvola/issues) kullanılabilir. Şimdilik dışarıdan kod katkısı (pull request) kabul edilmiyor. Güvenlik açıkları için: [SECURITY.md](SECURITY.md).
+Hata bildirimleri ve öneriler için [Issues](https://github.com/YildizDikme/zeyvola-screen-recorder/issues) kullanılabilir. Şimdilik dışarıdan kod katkısı (pull request) kabul edilmiyor. Güvenlik açıkları için: [SECURITY.md](SECURITY.md).

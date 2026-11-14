@@ -8,8 +8,8 @@ Zeyvola contains the third-party software listed below. Each component is distri
 **Zeyvola'nın kendi lisansı: PolyForm Shield License 1.0.0** (`LICENSE`). Bu dosya yalnızca üçüncü taraf bileşenleri kapsar.
 *Zeyvola's own license: PolyForm Shield License 1.0.0* (`LICENSE`). This file covers third-party components only.
 
-> Required Notice: Copyright © 2026 Yıldız Dikme (https://github.com/YildizDikme/zeyvola)
-> Licensor Line of Business: Zeyvola, screen recording and video editing software (https://github.com/YildizDikme/zeyvola)
+> Required Notice: Copyright © 2026 Yıldız Dikme (https://github.com/YildizDikme/zeyvola-screen-recorder)
+> Licensor Line of Business: Zeyvola, screen recording and video editing software (https://github.com/YildizDikme/zeyvola-screen-recorder)
 
 ## 1. Uygulamayla dağıtılan JavaScript paketleri / Bundled JavaScript packages
 
